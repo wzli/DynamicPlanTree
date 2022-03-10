@@ -4,6 +4,7 @@ use predicate::*;
 
 use log::debug;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::{
     any::Any,
@@ -11,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[typetag::serde]
 pub trait StateMachine: Send {
     // required
     fn as_any(&self) -> &dyn Any;
@@ -38,26 +40,42 @@ pub fn cast<T: StateMachine + 'static>(sm: &dyn StateMachine) -> Option<&T> {
     sm.as_any().downcast_ref::<T>()
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Transition {
     pub src: Vec<String>,
     pub dst: Vec<String>,
-    pub predicate: Box<dyn Predicate<Plan>>,
+    pub predicate: Box<dyn Predicate>,
 }
 
+impl Default for Transition {
+    fn default() -> Self {
+        Self {
+            src: Vec::new(),
+            dst: Vec::new(),
+            predicate: Box::new(False),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Plan {
     name: String,
     active: bool,
+    #[serde(with = "serde_millis")]
     run_timestamp: Instant,
-
+    #[serde(with = "serde_millis")]
     pub run_interval: Duration,
     pub state_machine: Box<dyn StateMachine>,
     pub status: Option<String>,
+    #[serde(skip)]
     pub plans: Vec<Plan>,
     pub transitions: Vec<Transition>,
     pub data: Value,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct DefaultStateMachine;
+#[typetag::serde]
 impl StateMachine for DefaultStateMachine {
     fn as_any(&self) -> &dyn Any {
         self
@@ -319,13 +337,14 @@ impl Drop for Plan {
 mod tests {
     use crate::*;
 
-    #[derive(Default)]
+    #[derive(Serialize, Deserialize, Default)]
     struct TestStateMachine {
         entry_count: u32,
         exit_count: u32,
         run_count: u32,
     }
 
+    #[typetag::serde]
     impl StateMachine for TestStateMachine {
         fn as_any(&self) -> &dyn Any {
             self
@@ -411,7 +430,7 @@ mod tests {
             Transition {
                 src: vec!["A".into()],
                 dst: vec!["B".into()],
-                predicate: Box::new(True),
+                predicate: Box::new(Or(vec![Box::new(True), Box::new(False)])),
             },
             Transition {
                 src: vec!["B".into()],
@@ -458,5 +477,6 @@ mod tests {
             };
             assert_eq!(sm.run_count, run_cycles);
         }
+        debug!("{}", serde_yaml::to_string(&root_plan).unwrap());
     }
 }
