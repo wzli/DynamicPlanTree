@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::{
     any::Any,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     time::{Duration, Instant},
 };
 
@@ -42,19 +42,9 @@ pub fn cast<T: StateMachine + 'static>(sm: &dyn StateMachine) -> Option<&T> {
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
-    pub src: Vec<String>,
-    pub dst: Vec<String>,
+    pub from: Vec<String>,
+    pub to: Vec<String>,
     pub predicate: Box<dyn Predicate>,
-}
-
-impl Default for Transition {
-    fn default() -> Self {
-        Self {
-            src: Vec::new(),
-            dst: Vec::new(),
-            predicate: Box::new(False),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -181,41 +171,47 @@ impl Plan {
     }
 
     pub fn run(&mut self) {
-        // call run() recursively and store status
+        // call run() recursively
         self.plans
             .iter_mut()
             .filter(|plan| plan.active)
             .par_bridge()
             .for_each(|plan| plan.run());
 
-        // evaluate state transitions
+        // limit execution frequency
+        if self.run_timestamp.elapsed() < self.run_interval {
+            return;
+        }
+        self.run_timestamp = Instant::now();
+
+        // get active set of plans
         let active_plans = self
             .plans
             .iter()
             .filter(|plan| plan.active)
             .map(|plan| plan.name.clone())
             .collect::<HashSet<_>>();
+
+        // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
         transitions
             .iter()
             .filter(|t| {
-                t.src.len() <= active_plans.len() && t.src.iter().all(|x| active_plans.contains(x))
+                t.from.len() == active_plans.len()
+                    && t.from.iter().all(|p| active_plans.contains(p))
             })
             .for_each(|t| {
-                t.src.iter().filter(|x| !t.dst.contains(x)).for_each(|x| {
-                    self.exit(x);
+                t.from.iter().filter(|p| !t.to.contains(p)).for_each(|p| {
+                    self.exit(p);
                 });
-                t.dst.iter().filter(|x| !t.src.contains(x)).for_each(|x| {
-                    self.enter(x);
+                t.to.iter().filter(|p| !t.from.contains(p)).for_each(|p| {
+                    self.enter(p);
                 });
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
-        if self.run_timestamp.elapsed() > self.run_interval {
-            // run the plan machine of this plan
-            self.run_timestamp = Instant::now();
-            self.call("on_run", |state_machine, plan| state_machine.on_run(plan));
-        }
+        // run the state machine of this plan
+        self.call("on_run", |state_machine, plan| state_machine.on_run(plan));
     }
 
     pub fn enter(&mut self, name: &str) -> Option<&mut Plan> {
@@ -355,34 +351,8 @@ mod tests {
         fn on_exit(&mut self, _plan: &mut Plan) {
             self.exit_count += 1;
         }
-        fn on_run(&mut self, plan: &mut Plan) {
+        fn on_run(&mut self, _plan: &mut Plan) {
             self.run_count += 1;
-            let active_plans = plan
-                .plans
-                .iter()
-                .filter(|plan| plan.active())
-                .map(|plan| plan.name().clone())
-                .collect::<Vec<_>>();
-
-            /*
-            for x in active_plans {
-                match x.as_str() {
-                    "A" => {
-                        plan.exit("A");
-                        plan.enter("B");
-                    }
-                    "B" => {
-                        plan.exit("B");
-                        plan.enter("C");
-                    }
-                    "C" => {
-                        plan.exit("C");
-                        plan.enter("A");
-                    }
-                    _ => {}
-                }
-            }
-            */
         }
     }
 
@@ -428,18 +398,18 @@ mod tests {
         let mut root_plan = new_plan("root", true);
         root_plan.transitions = vec![
             Transition {
-                src: vec!["A".into()],
-                dst: vec!["B".into()],
+                from: vec!["A".into()],
+                to: vec!["B".into()],
                 predicate: Box::new(Or(vec![Box::new(True), Box::new(False)])),
             },
             Transition {
-                src: vec!["B".into()],
-                dst: vec!["C".into()],
+                from: vec!["B".into()],
+                to: vec!["C".into()],
                 predicate: Box::new(True),
             },
             Transition {
-                src: vec!["C".into()],
-                dst: vec!["A".into()],
+                from: vec!["C".into()],
+                to: vec!["A".into()],
                 predicate: Box::new(True),
             },
         ];
