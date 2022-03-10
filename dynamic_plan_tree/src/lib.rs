@@ -1,12 +1,14 @@
+mod predicate;
+
+use predicate::*;
+
 use log::debug;
 use rayon::prelude::*;
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
-
-mod predicate;
 
 pub trait StateMachine: Send {
     // required
@@ -35,6 +37,12 @@ pub fn cast<T: StateMachine + 'static>(sm: &dyn StateMachine) -> Option<&T> {
     sm.as_any().downcast_ref::<T>()
 }
 
+pub struct Transition {
+    pub src: Vec<String>,
+    pub dst: Vec<String>,
+    pub predicate: Box<dyn Predicate<Plan>>,
+}
+
 pub struct Plan {
     name: String,
     active: bool,
@@ -44,6 +52,7 @@ pub struct Plan {
     pub state_machine: Box<dyn StateMachine>,
     pub status: Option<String>,
     pub plans: Vec<Plan>,
+    pub transitions: Vec<Transition>,
     pub storage: HashMap<String, Box<dyn Any + Send>>,
 }
 
@@ -101,6 +110,7 @@ impl Plan {
             state_machine,
             status: None,
             plans: Vec::new(),
+            transitions: Vec::new(),
             storage: HashMap::new(),
         };
         if active {
@@ -158,6 +168,29 @@ impl Plan {
             .filter(|plan| plan.active)
             .par_bridge()
             .for_each(|plan| plan.run());
+
+        // evaluate state transitions
+        let active_plans = self
+            .plans
+            .iter()
+            .filter(|plan| plan.active)
+            .map(|plan| plan.name.clone())
+            .collect::<HashSet<_>>();
+        let transitions = std::mem::replace(&mut self.transitions, Vec::new());
+        transitions
+            .iter()
+            .filter(|t| {
+                t.src.len() <= active_plans.len() && t.src.iter().all(|x| active_plans.contains(x))
+            })
+            .for_each(|t| {
+                t.src.iter().filter(|x| !t.dst.contains(x)).for_each(|x| {
+                    self.exit(x);
+                });
+                t.dst.iter().filter(|x| !t.src.contains(x)).for_each(|x| {
+                    self.enter(x);
+                });
+            });
+        std::mem::replace(&mut self.transitions, transitions);
 
         if self.run_timestamp.elapsed() > self.run_interval {
             // run the plan machine of this plan
@@ -311,6 +344,7 @@ mod tests {
                 .map(|plan| plan.name().clone())
                 .collect::<Vec<_>>();
 
+            /*
             for x in active_plans {
                 match x.as_str() {
                     "A" => {
@@ -328,6 +362,7 @@ mod tests {
                     _ => {}
                 }
             }
+            */
         }
     }
 
@@ -371,6 +406,23 @@ mod tests {
     fn cycle_plans() {
         let _ = env_logger::try_init();
         let mut root_plan = new_plan("root", true);
+        root_plan.transitions = vec![
+            Transition {
+                src: vec!["A".into()],
+                dst: vec!["B".into()],
+                predicate: Box::new(True),
+            },
+            Transition {
+                src: vec!["B".into()],
+                dst: vec!["C".into()],
+                predicate: Box::new(True),
+            },
+            Transition {
+                src: vec!["C".into()],
+                dst: vec!["A".into()],
+                predicate: Box::new(True),
+            },
+        ];
         // init plan to A
         root_plan.insert(new_plan("A", true));
         root_plan.insert(new_plan("B", false));

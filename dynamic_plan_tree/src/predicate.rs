@@ -13,86 +13,70 @@ struct TestStruct2(f32);
 #[typetag::serialize]
 impl TestTrait<bool> for TestStruct2 {}
 
-trait Predicate<T> {
+pub trait Predicate<T>: Send {
     fn evaluate(&self, t: &T) -> bool;
 }
 
-struct True;
+pub struct True;
 impl<T> Predicate<T> for True {
     fn evaluate(&self, _: &T) -> bool {
         true
     }
 }
 
-struct False;
+pub struct False;
 impl<T> Predicate<T> for False {
     fn evaluate(&self, _: &T) -> bool {
         false
     }
 }
 
-struct And<T>(Vec<Box<dyn Predicate<T>>>);
+pub struct And<T>(Vec<Box<dyn Predicate<T>>>);
 impl<T> Predicate<T> for And<T> {
     fn evaluate(&self, t: &T) -> bool {
         self.0.iter().all(|pred| pred.evaluate(t))
     }
 }
 
-struct Or<T>(Vec<Box<dyn Predicate<T>>>);
+pub struct Or<T>(Vec<Box<dyn Predicate<T>>>);
 impl<T> Predicate<T> for Or<T> {
     fn evaluate(&self, t: &T) -> bool {
         self.0.iter().any(|pred| pred.evaluate(t))
     }
 }
 
-struct Not<T>(Box<dyn Predicate<T>>);
+pub struct Not<T>(Box<dyn Predicate<T>>);
 impl<T> Predicate<T> for Not<T> {
     fn evaluate(&self, t: &T) -> bool {
         !self.0.evaluate(t)
     }
 }
 
-struct Xor<T>(Vec<Box<dyn Predicate<T>>>);
+pub struct Xor<T>(Vec<Box<dyn Predicate<T>>>);
 impl<T> Predicate<T> for Xor<T> {
     fn evaluate(&self, t: &T) -> bool {
         0 != 1 & self.0.iter().filter(|pred| pred.evaluate(t)).count()
     }
 }
 
-struct Nand<T>(Vec<Box<dyn Predicate<T>>>);
+pub struct Nand<T>(Vec<Box<dyn Predicate<T>>>);
 impl<T> Predicate<T> for Nand<T> {
     fn evaluate(&self, t: &T) -> bool {
         !self.0.iter().all(|pred| pred.evaluate(t))
     }
 }
 
-struct Nor<T>(Vec<Box<dyn Predicate<T>>>);
+pub struct Nor<T>(Vec<Box<dyn Predicate<T>>>);
 impl<T> Predicate<T> for Nor<T> {
     fn evaluate(&self, t: &T) -> bool {
         !self.0.iter().any(|pred| pred.evaluate(t))
     }
 }
 
-struct Xnor<T>(Vec<Box<dyn Predicate<T>>>);
+pub struct Xnor<T>(Vec<Box<dyn Predicate<T>>>);
 impl<T> Predicate<T> for Xnor<T> {
     fn evaluate(&self, t: &T) -> bool {
         0 == 1 & self.0.iter().filter(|pred| pred.evaluate(t)).count()
-    }
-}
-
-struct Transition {
-    src: Vec<String>,
-    dst: Vec<String>,
-    pred: Box<dyn Predicate<bool>>,
-}
-
-impl Transition {
-    fn new(pred: Box<dyn Predicate<bool>>) -> Self {
-        Self {
-            src: Vec::new(),
-            dst: Vec::new(),
-            pred,
-        }
     }
 }
 
