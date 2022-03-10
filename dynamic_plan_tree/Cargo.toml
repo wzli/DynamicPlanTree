@@ -9,6 +9,7 @@ edition = "2021"
 log = "0.4"
 rayon = "1.5"
 serde = "1.0"
+serde_millis = "0.1"
 serde_yaml = "0.8"
 typetag = "0.1"
 

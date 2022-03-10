@@ -1,81 +1,87 @@
-use serde::{Deserialize, Serialize};
+use crate::*;
 
-#[typetag::serialize(tag = "type")]
-trait TestTrait<T> {}
-
-#[derive(Serialize, Deserialize)]
-struct TestStruct(i32);
-#[typetag::serialize]
-impl TestTrait<bool> for TestStruct {}
-
-#[derive(Serialize, Deserialize)]
-struct TestStruct2(f32);
-#[typetag::serialize]
-impl TestTrait<bool> for TestStruct2 {}
-
-pub trait Predicate<T>: Send {
-    fn evaluate(&self, t: &T) -> bool;
+#[typetag::serde]
+pub trait Predicate: Send {
+    fn evaluate(&self, t: &Plan) -> bool;
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct True;
-impl<T> Predicate<T> for True {
-    fn evaluate(&self, _: &T) -> bool {
+#[typetag::serde]
+impl Predicate for True {
+    fn evaluate(&self, _: &Plan) -> bool {
         true
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct False;
-impl<T> Predicate<T> for False {
-    fn evaluate(&self, _: &T) -> bool {
+#[typetag::serde]
+impl Predicate for False {
+    fn evaluate(&self, _: &Plan) -> bool {
         false
     }
 }
 
-pub struct And<T>(Vec<Box<dyn Predicate<T>>>);
-impl<T> Predicate<T> for And<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct And(pub Vec<Box<dyn Predicate>>);
+#[typetag::serde]
+impl Predicate for And {
+    fn evaluate(&self, t: &Plan) -> bool {
         self.0.iter().all(|pred| pred.evaluate(t))
     }
 }
 
-pub struct Or<T>(Vec<Box<dyn Predicate<T>>>);
-impl<T> Predicate<T> for Or<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct Or(pub Vec<Box<dyn Predicate>>);
+#[typetag::serde]
+impl Predicate for Or {
+    fn evaluate(&self, t: &Plan) -> bool {
         self.0.iter().any(|pred| pred.evaluate(t))
     }
 }
 
-pub struct Not<T>(Box<dyn Predicate<T>>);
-impl<T> Predicate<T> for Not<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct Not(pub Box<dyn Predicate>);
+#[typetag::serde]
+impl Predicate for Not {
+    fn evaluate(&self, t: &Plan) -> bool {
         !self.0.evaluate(t)
     }
 }
 
-pub struct Xor<T>(Vec<Box<dyn Predicate<T>>>);
-impl<T> Predicate<T> for Xor<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct Xor(pub Vec<Box<dyn Predicate>>);
+#[typetag::serde]
+impl Predicate for Xor {
+    fn evaluate(&self, t: &Plan) -> bool {
         0 != 1 & self.0.iter().filter(|pred| pred.evaluate(t)).count()
     }
 }
 
-pub struct Nand<T>(Vec<Box<dyn Predicate<T>>>);
-impl<T> Predicate<T> for Nand<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct Nand(pub Vec<Box<dyn Predicate>>);
+#[typetag::serde]
+impl Predicate for Nand {
+    fn evaluate(&self, t: &Plan) -> bool {
         !self.0.iter().all(|pred| pred.evaluate(t))
     }
 }
 
-pub struct Nor<T>(Vec<Box<dyn Predicate<T>>>);
-impl<T> Predicate<T> for Nor<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct Nor(pub Vec<Box<dyn Predicate>>);
+#[typetag::serde]
+impl Predicate for Nor {
+    fn evaluate(&self, t: &Plan) -> bool {
         !self.0.iter().any(|pred| pred.evaluate(t))
     }
 }
 
-pub struct Xnor<T>(Vec<Box<dyn Predicate<T>>>);
-impl<T> Predicate<T> for Xnor<T> {
-    fn evaluate(&self, t: &T) -> bool {
+#[derive(Serialize, Deserialize)]
+pub struct Xnor(pub Vec<Box<dyn Predicate>>);
+#[typetag::serde]
+impl Predicate for Xnor {
+    fn evaluate(&self, t: &Plan) -> bool {
         0 == 1 & self.0.iter().filter(|pred| pred.evaluate(t)).count()
     }
 }
@@ -84,104 +90,99 @@ impl<T> Predicate<T> for Xnor<T> {
 mod tests {
     use crate::predicate::*;
 
-    struct AB {
-        pub a: bool,
-        pub b: bool,
-    }
-
-    struct IsA;
-    impl Predicate<AB> for IsA {
-        fn evaluate(&self, ab: &AB) -> bool {
-            ab.a
-        }
-    }
-
-    struct IsB;
-    impl Predicate<AB> for IsB {
-        fn evaluate(&self, ab: &AB) -> bool {
-            ab.b
-        }
-    }
-
     #[test]
     fn and() {
-        let is_a = Box::new(IsA);
-        let is_b = Box::new(IsB);
-        let op = And(vec![is_a, is_b]);
-        assert!(!op.evaluate(&AB { a: false, b: false }));
-        assert!(!op.evaluate(&AB { a: false, b: true }));
-        assert!(!op.evaluate(&AB { a: true, b: false }));
-        assert!(op.evaluate(&AB { a: true, b: true }));
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(!And(vec![Box::new(False), Box::new(False)]).evaluate(&p));
+        assert!(!And(vec![Box::new(False), Box::new(True)]).evaluate(&p));
+        assert!(!And(vec![Box::new(True), Box::new(False)]).evaluate(&p));
+        assert!(And(vec![Box::new(True), Box::new(True)]).evaluate(&p));
     }
 
     #[test]
     fn or() {
-        let is_a = Box::new(IsA);
-        let is_b = Box::new(IsB);
-        let op = Or(vec![is_a, is_b]);
-        assert!(!op.evaluate(&AB { a: false, b: false }));
-        assert!(op.evaluate(&AB { a: false, b: true }));
-        assert!(op.evaluate(&AB { a: true, b: false }));
-        assert!(op.evaluate(&AB { a: true, b: true }));
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(!Or(vec![Box::new(False), Box::new(False)]).evaluate(&p));
+        assert!(Or(vec![Box::new(False), Box::new(True)]).evaluate(&p));
+        assert!(Or(vec![Box::new(True), Box::new(False)]).evaluate(&p));
+        assert!(Or(vec![Box::new(True), Box::new(True)]).evaluate(&p));
     }
 
     #[test]
     fn not() {
-        assert!(!Not::<()>(Box::new(True)).evaluate(&()));
-        assert!(Not::<()>(Box::new(False)).evaluate(&()));
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(!Not(Box::new(True)).evaluate(&p));
+        assert!(Not(Box::new(False)).evaluate(&p));
     }
 
     #[test]
     fn xor() {
-        let is_a = Box::new(IsA);
-        let is_b = Box::new(IsB);
-        let op = Xor(vec![is_a, is_b]);
-        assert!(!op.evaluate(&AB { a: false, b: false }));
-        assert!(op.evaluate(&AB { a: false, b: true }));
-        assert!(op.evaluate(&AB { a: true, b: false }));
-        assert!(!op.evaluate(&AB { a: true, b: true }));
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(!Xor(vec![Box::new(False), Box::new(False)]).evaluate(&p));
+        assert!(Xor(vec![Box::new(False), Box::new(True)]).evaluate(&p));
+        assert!(Xor(vec![Box::new(True), Box::new(False)]).evaluate(&p));
+        assert!(!Xor(vec![Box::new(True), Box::new(True)]).evaluate(&p));
     }
 
     #[test]
     fn nand() {
-        let is_a = Box::new(IsA);
-        let is_b = Box::new(IsB);
-        let op = Nand(vec![is_a, is_b]);
-        assert!(op.evaluate(&AB { a: false, b: false }));
-        assert!(op.evaluate(&AB { a: false, b: true }));
-        assert!(op.evaluate(&AB { a: true, b: false }));
-        assert!(!op.evaluate(&AB { a: true, b: true }));
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(Nand(vec![Box::new(False), Box::new(False)]).evaluate(&p));
+        assert!(Nand(vec![Box::new(False), Box::new(True)]).evaluate(&p));
+        assert!(Nand(vec![Box::new(True), Box::new(False)]).evaluate(&p));
+        assert!(!Nand(vec![Box::new(True), Box::new(True)]).evaluate(&p));
     }
 
     #[test]
     fn nor() {
-        let is_a = Box::new(IsA);
-        let is_b = Box::new(IsB);
-        let op = Nor(vec![is_a, is_b]);
-        assert!(op.evaluate(&AB { a: false, b: false }));
-        assert!(!op.evaluate(&AB { a: false, b: true }));
-        assert!(!op.evaluate(&AB { a: true, b: false }));
-        assert!(!op.evaluate(&AB { a: true, b: true }));
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(Nor(vec![Box::new(False), Box::new(False)]).evaluate(&p));
+        assert!(!Nor(vec![Box::new(False), Box::new(True)]).evaluate(&p));
+        assert!(!Nor(vec![Box::new(True), Box::new(False)]).evaluate(&p));
+        assert!(!Nor(vec![Box::new(True), Box::new(True)]).evaluate(&p));
     }
 
     #[test]
     fn xnor() {
-        let is_a = Box::new(IsA);
-        let is_b = Box::new(IsB);
-        let op = Xnor(vec![is_a, is_b]);
-        assert!(op.evaluate(&AB { a: false, b: false }));
-        assert!(!op.evaluate(&AB { a: false, b: true }));
-        assert!(!op.evaluate(&AB { a: true, b: false }));
-        assert!(op.evaluate(&AB { a: true, b: true }));
-    }
-
-    #[test]
-    fn serde() {
-        let x: Box<dyn TestTrait<bool>> = Box::new(TestStruct(11));
-        let y = TestStruct2(0.9);
-        let yaml = serde_yaml::to_string(&x).unwrap();
-        println!("{yaml}");
-        let yaml = serde_yaml::to_string(&y).unwrap();
-        println!("{yaml}");
+        let p: Plan = Plan::new(
+            Box::new(DefaultStateMachine),
+            "",
+            false,
+            Duration::new(0, 0),
+        );
+        assert!(Xnor(vec![Box::new(False), Box::new(False)]).evaluate(&p));
+        assert!(!Xnor(vec![Box::new(False), Box::new(True)]).evaluate(&p));
+        assert!(!Xnor(vec![Box::new(True), Box::new(False)]).evaluate(&p));
+        assert!(Xnor(vec![Box::new(True), Box::new(True)]).evaluate(&p));
     }
 }
