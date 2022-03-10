@@ -12,8 +12,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[typetag::serde]
-pub trait StateMachine: Send {
+#[typetag::serde(tag = "type")]
+pub trait Behaviour: Send {
     // required
     fn as_any(&self) -> &dyn Any;
     fn on_run(&mut self, _plan: &mut Plan);
@@ -26,8 +26,8 @@ pub trait StateMachine: Send {
             .filter(|plan| !filter_active || plan.active)
             .par_bridge()
             .map(|plan| {
-                plan.call("utility", |state_machine, plan| {
-                    state_machine.utility(plan, filter_active)
+                plan.call("utility", |behaviour, plan| {
+                    behaviour.utility(plan, filter_active)
                 })
             })
             .collect::<Vec<_>>()
@@ -36,7 +36,7 @@ pub trait StateMachine: Send {
     }
 }
 
-pub fn cast<T: StateMachine + 'static>(sm: &dyn StateMachine) -> Option<&T> {
+pub fn cast<T: Behaviour + 'static>(sm: &dyn Behaviour) -> Option<&T> {
     sm.as_any().downcast_ref::<T>()
 }
 
@@ -50,23 +50,22 @@ pub struct Transition {
 #[derive(Serialize, Deserialize)]
 pub struct Plan {
     name: String,
+    pub behaviour: Box<dyn Behaviour>,
     active: bool,
-    #[serde(with = "serde_millis")]
-    run_timestamp: Instant,
+    pub status: Option<String>,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
-    pub state_machine: Box<dyn StateMachine>,
-    pub status: Option<String>,
-    #[serde(skip)]
-    pub plans: Vec<Plan>,
     pub transitions: Vec<Transition>,
+    pub plans: Vec<Plan>,
     pub data: Value,
+    #[serde(with = "serde_millis")]
+    timestamp: Instant,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct DefaultStateMachine;
+pub struct DefaultBehaviour;
 #[typetag::serde]
-impl StateMachine for DefaultStateMachine {
+impl Behaviour for DefaultBehaviour {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -101,31 +100,29 @@ impl Plan {
         self.active
     }
 
-    pub fn run_timestamp(&self) -> Instant {
-        self.run_timestamp
+    pub fn timestamp(&self) -> Instant {
+        self.timestamp
     }
 
     pub fn new<S: Into<String>>(
-        state_machine: Box<dyn StateMachine>,
+        behaviour: Box<dyn Behaviour>,
         name: S,
         active: bool,
         run_interval: Duration,
     ) -> Self {
         let mut plan = Plan {
             name: name.into(),
-            active,
-            run_timestamp: Instant::now(),
+            behaviour,
             run_interval,
-            state_machine,
             status: None,
-            plans: Vec::new(),
+            active,
             transitions: Vec::new(),
+            plans: Vec::new(),
             data: Value::Null,
+            timestamp: Instant::now(),
         };
         if active {
-            plan.call("on_entry", |state_machine, plan| {
-                state_machine.on_entry(plan)
-            });
+            plan.call("on_entry", |behaviour, plan| behaviour.on_entry(plan));
         }
         plan
     }
@@ -179,10 +176,10 @@ impl Plan {
             .for_each(|plan| plan.run());
 
         // limit execution frequency
-        if self.run_timestamp.elapsed() < self.run_interval {
+        if self.timestamp.elapsed() < self.run_interval {
             return;
         }
-        self.run_timestamp = Instant::now();
+        self.timestamp = Instant::now();
 
         // get active set of plans
         let active_plans = self
@@ -211,7 +208,7 @@ impl Plan {
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
         // run the state machine of this plan
-        self.call("on_run", |state_machine, plan| state_machine.on_run(plan));
+        self.call("on_run", |behaviour, plan| behaviour.on_run(plan));
     }
 
     pub fn enter(&mut self, name: &str) -> Option<&mut Plan> {
@@ -226,20 +223,14 @@ impl Plan {
                 // if plan is inactive, set as active and call on_entry()
                 if !plan.active {
                     plan.active = true;
-                    plan.call("on_entry", |state_machine, plan| {
-                        state_machine.on_entry(plan)
-                    });
+                    plan.call("on_entry", |behaviour, plan| behaviour.on_entry(plan));
                 }
                 Some(plan)
             }
             // if plan doesn't exist, create and insert an default plan
             Err(pos) => {
-                let default = Plan::new(
-                    Box::new(DefaultStateMachine),
-                    name,
-                    true,
-                    Duration::new(0, 0),
-                );
+                let default =
+                    Plan::new(Box::new(DefaultBehaviour), name, true, Duration::new(0, 0));
                 self.plans.insert(pos, default);
                 Some(&mut self.plans[pos])
             }
@@ -267,7 +258,7 @@ impl Plan {
 
         // trigger on_exit() for self
         self.active = false;
-        self.call("on_exit", |state_machine, plan| state_machine.on_exit(plan));
+        self.call("on_exit", |behaviour, plan| behaviour.on_exit(plan));
     }
 
     pub fn highest_utility(&mut self) -> Option<(&Plan, f64)> {
@@ -277,11 +268,7 @@ impl Plan {
             let (pos, utility) = self
                 .plans
                 .par_iter_mut()
-                .map(|plan| {
-                    plan.call("utility", |state_machine, plan| {
-                        state_machine.utility(plan, false)
-                    })
-                })
+                .map(|plan| plan.call("utility", |behaviour, plan| behaviour.utility(plan, false)))
                 .enumerate()
                 .collect::<Vec<_>>()
                 .into_iter()
@@ -308,13 +295,12 @@ impl Plan {
 
     fn call<F, T>(&mut self, f_name: &str, f: F) -> T
     where
-        F: FnOnce(&mut Box<dyn StateMachine>, &mut Plan) -> T,
+        F: FnOnce(&mut Box<dyn Behaviour>, &mut Plan) -> T,
     {
         self.debug_log(">>", f_name);
-        let mut state_machine =
-            std::mem::replace(&mut self.state_machine, Box::new(DefaultStateMachine));
-        let ret = f(&mut state_machine, self);
-        let _ = std::mem::replace(&mut self.state_machine, state_machine);
+        let mut behaviour = std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour));
+        let ret = f(&mut behaviour, self);
+        let _ = std::mem::replace(&mut self.behaviour, behaviour);
         self.debug_log("<<", f_name);
         ret
     }
@@ -324,7 +310,7 @@ impl Drop for Plan {
     fn drop(&mut self) {
         if self.active {
             self.active = false;
-            self.call("on_exit", |state_machine, plan| state_machine.on_exit(plan));
+            self.call("on_exit", |behaviour, plan| behaviour.on_exit(plan));
         }
     }
 }
@@ -334,14 +320,14 @@ mod tests {
     use crate::*;
 
     #[derive(Serialize, Deserialize, Default)]
-    struct TestStateMachine {
+    struct TestBehaviour {
         entry_count: u32,
         exit_count: u32,
         run_count: u32,
     }
 
     #[typetag::serde]
-    impl StateMachine for TestStateMachine {
+    impl Behaviour for TestBehaviour {
         fn as_any(&self) -> &dyn Any {
             self
         }
@@ -358,7 +344,7 @@ mod tests {
 
     fn new_plan(name: &str, active: bool) -> Plan {
         Plan::new(
-            Box::new(TestStateMachine::default()),
+            Box::new(TestBehaviour::default()),
             name,
             active,
             Duration::new(0, 0),
@@ -379,7 +365,7 @@ mod tests {
         for (i, plan) in root_plan.plans.iter().enumerate() {
             assert!(plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
-            let sm = cast::<TestStateMachine>(&*plan.state_machine).unwrap();
+            let sm = cast::<TestBehaviour>(&*plan.behaviour).unwrap();
             assert_eq!(sm.entry_count, 1);
             assert_eq!(sm.run_count, 0);
             assert_eq!(sm.exit_count, 0);
@@ -387,7 +373,7 @@ mod tests {
         root_plan.exit_all();
         for plan in &root_plan.plans {
             assert!(!plan.active());
-            let sm = cast::<TestStateMachine>(&*plan.state_machine).unwrap();
+            let sm = cast::<TestBehaviour>(&*plan.behaviour).unwrap();
             assert_eq!(sm.exit_count, 1);
         }
     }
@@ -436,7 +422,7 @@ mod tests {
         }
         root_plan.exit_all();
         for plan in &root_plan.plans {
-            let sm = cast::<TestStateMachine>(&*plan.state_machine).unwrap();
+            let sm = cast::<TestBehaviour>(&*plan.behaviour).unwrap();
             assert_eq!(sm.entry_count, cycles);
             assert_eq!(sm.exit_count, cycles);
             // off by one becase inital plan didn't run

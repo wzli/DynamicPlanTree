@@ -1,6 +1,6 @@
 use crate::*;
 
-#[typetag::serde]
+#[typetag::serde(tag = "type")]
 pub trait Predicate: Send {
     fn evaluate(&self, t: &Plan) -> bool;
 }
@@ -92,12 +92,7 @@ mod tests {
 
     #[test]
     fn and() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!And(vec![Box::new(False), Box::new(False)]).evaluate(&p));
         assert!(!And(vec![Box::new(False), Box::new(True)]).evaluate(&p));
         assert!(!And(vec![Box::new(True), Box::new(False)]).evaluate(&p));
@@ -106,12 +101,7 @@ mod tests {
 
     #[test]
     fn or() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!Or(vec![Box::new(False), Box::new(False)]).evaluate(&p));
         assert!(Or(vec![Box::new(False), Box::new(True)]).evaluate(&p));
         assert!(Or(vec![Box::new(True), Box::new(False)]).evaluate(&p));
@@ -120,24 +110,14 @@ mod tests {
 
     #[test]
     fn not() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!Not(Box::new(True)).evaluate(&p));
         assert!(Not(Box::new(False)).evaluate(&p));
     }
 
     #[test]
     fn xor() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!Xor(vec![Box::new(False), Box::new(False)]).evaluate(&p));
         assert!(Xor(vec![Box::new(False), Box::new(True)]).evaluate(&p));
         assert!(Xor(vec![Box::new(True), Box::new(False)]).evaluate(&p));
@@ -146,12 +126,7 @@ mod tests {
 
     #[test]
     fn nand() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(Nand(vec![Box::new(False), Box::new(False)]).evaluate(&p));
         assert!(Nand(vec![Box::new(False), Box::new(True)]).evaluate(&p));
         assert!(Nand(vec![Box::new(True), Box::new(False)]).evaluate(&p));
@@ -160,12 +135,7 @@ mod tests {
 
     #[test]
     fn nor() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(Nor(vec![Box::new(False), Box::new(False)]).evaluate(&p));
         assert!(!Nor(vec![Box::new(False), Box::new(True)]).evaluate(&p));
         assert!(!Nor(vec![Box::new(True), Box::new(False)]).evaluate(&p));
@@ -174,12 +144,7 @@ mod tests {
 
     #[test]
     fn xnor() {
-        let p: Plan = Plan::new(
-            Box::new(DefaultStateMachine),
-            "",
-            false,
-            Duration::new(0, 0),
-        );
+        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(Xnor(vec![Box::new(False), Box::new(False)]).evaluate(&p));
         assert!(!Xnor(vec![Box::new(False), Box::new(True)]).evaluate(&p));
         assert!(!Xnor(vec![Box::new(True), Box::new(False)]).evaluate(&p));
