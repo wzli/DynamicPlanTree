@@ -6,6 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod predicate;
+
 pub trait StateMachine: Send {
     // required
     fn as_any(&self) -> &dyn Any;
