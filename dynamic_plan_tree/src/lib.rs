@@ -4,6 +4,7 @@ use predicate::*;
 
 use log::debug;
 use rayon::prelude::*;
+use serde_yaml::Value;
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
@@ -53,7 +54,7 @@ pub struct Plan {
     pub status: Option<String>,
     pub plans: Vec<Plan>,
     pub transitions: Vec<Transition>,
-    pub storage: HashMap<String, Box<dyn Any + Send>>,
+    pub data: Value,
 }
 
 pub struct DefaultStateMachine;
@@ -111,7 +112,7 @@ impl Plan {
             status: None,
             plans: Vec::new(),
             transitions: Vec::new(),
-            storage: HashMap::new(),
+            data: Value::Null,
         };
         if active {
             plan.call("on_entry", |state_machine, plan| {
@@ -176,7 +177,7 @@ impl Plan {
             .filter(|plan| plan.active)
             .map(|plan| plan.name.clone())
             .collect::<HashSet<_>>();
-        let transitions = std::mem::replace(&mut self.transitions, Vec::new());
+        let transitions = std::mem::take(&mut self.transitions);
         transitions
             .iter()
             .filter(|t| {
@@ -190,7 +191,7 @@ impl Plan {
                     self.enter(x);
                 });
             });
-        std::mem::replace(&mut self.transitions, transitions);
+        let _ = std::mem::replace(&mut self.transitions, transitions);
 
         if self.run_timestamp.elapsed() > self.run_interval {
             // run the plan machine of this plan

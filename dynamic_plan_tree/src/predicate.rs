@@ -179,9 +179,9 @@ mod tests {
     fn serde() {
         let x: Box<dyn TestTrait<bool>> = Box::new(TestStruct(11));
         let y = TestStruct2(0.9);
-        let json = serde_yaml::to_string(&x).unwrap();
-        println!("{json}");
-        let json = serde_json::to_string(&y).unwrap();
-        println!("{json}");
+        let yaml = serde_yaml::to_string(&x).unwrap();
+        println!("{yaml}");
+        let yaml = serde_yaml::to_string(&y).unwrap();
+        println!("{yaml}");
     }
 }
