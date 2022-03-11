@@ -171,6 +171,7 @@ impl Plan {
                 // if plan is inactive, set as active and call on_entry()
                 if !plan.active {
                     plan.active = true;
+                    plan.status = None;
                     plan.call("on_entry", |behaviour, plan| behaviour.on_entry(plan));
                 }
                 Some(plan)
