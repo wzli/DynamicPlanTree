@@ -186,7 +186,7 @@ impl Plan {
             .plans
             .iter()
             .filter(|plan| plan.active)
-            .map(|plan| plan.name.clone())
+            .map(|plan| &plan.name)
             .collect::<HashSet<_>>();
 
         // evaluate state transitions
