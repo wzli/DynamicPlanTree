@@ -196,7 +196,7 @@ impl Plan {
             .filter(|t| {
                 t.src.len() == active_plans.len()
                     && t.src.iter().all(|p| active_plans.contains(p))
-                    && t.predicate.evaluate(self)
+                    && t.predicate.evaluate(self, &t.src)
             })
             .collect::<Vec<_>>()
             .iter()
