@@ -112,6 +112,11 @@ impl Plan {
         Some(&self.plans[pos])
     }
 
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Plan> {
+        let pos = self.find(name).ok()?;
+        Some(&mut self.plans[pos])
+    }
+
     pub fn run(&mut self) {
         // call run() recursively
         self.plans

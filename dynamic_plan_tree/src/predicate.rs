@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn and() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!And(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
         assert!(!And(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
         assert!(!And(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn or() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!Or(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
         assert!(Or(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
         assert!(Or(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
@@ -178,14 +178,14 @@ mod tests {
 
     #[test]
     fn not() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!Not(Box::new(True)).evaluate(&p, &[]));
         assert!(Not(Box::new(False)).evaluate(&p, &[]));
     }
 
     #[test]
     fn xor() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(!Xor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
         assert!(Xor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
         assert!(Xor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn nand() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(Nand(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
         assert!(Nand(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
         assert!(Nand(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn nor() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(Nor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
         assert!(!Nor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
         assert!(!Nor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
@@ -212,10 +212,116 @@ mod tests {
 
     #[test]
     fn xnor() {
-        let p: Plan = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         assert!(Xnor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
         assert!(!Xnor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
         assert!(!Xnor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
         assert!(Xnor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+    }
+
+    fn make_plan(a: bool, b: bool, c: Option<bool>) -> Plan {
+        let mut p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        p.insert(Plan::new(
+            Box::new(DefaultBehaviour),
+            "a",
+            false,
+            Duration::new(0, 0),
+        ));
+        p.insert(Plan::new(
+            Box::new(DefaultBehaviour),
+            "b",
+            false,
+            Duration::new(0, 0),
+        ));
+        p.insert(Plan::new(
+            Box::new(DefaultBehaviour),
+            "c",
+            false,
+            Duration::new(0, 0),
+        ));
+        p.get_mut("a").unwrap().status = Some(a);
+        p.get_mut("b").unwrap().status = Some(b);
+        p.get_mut("c").unwrap().status = c;
+        p
+    }
+
+    #[test]
+    fn all_success() {
+        let op = AllSuccess;
+        let src = ["a".into(), "b".into(), "c".into()];
+        assert!(!op.evaluate(&make_plan(false, false, Some(false)), &src));
+        assert!(!op.evaluate(&make_plan(false, true, Some(false)), &src));
+        assert!(!op.evaluate(&make_plan(true, false, Some(false)), &src));
+        assert!(!op.evaluate(&make_plan(true, true, Some(false)), &src));
+
+        assert!(!op.evaluate(&make_plan(false, false, None), &src));
+        assert!(!op.evaluate(&make_plan(false, true, None), &src));
+        assert!(!op.evaluate(&make_plan(true, false, None), &src));
+        assert!(!op.evaluate(&make_plan(true, true, None), &src));
+
+        assert!(!op.evaluate(&make_plan(false, false, Some(true)), &src));
+        assert!(!op.evaluate(&make_plan(false, true, Some(true)), &src));
+        assert!(!op.evaluate(&make_plan(true, false, Some(true)), &src));
+        assert!(op.evaluate(&make_plan(true, true, Some(true)), &src));
+    }
+
+    #[test]
+    fn any_success() {
+        let op = AnySuccess;
+        let src = ["a".into(), "b".into(), "c".into()];
+        assert!(!op.evaluate(&make_plan(false, false, Some(false)), &src));
+        assert!(op.evaluate(&make_plan(false, true, Some(false)), &src));
+        assert!(op.evaluate(&make_plan(true, false, Some(false)), &src));
+        assert!(op.evaluate(&make_plan(true, true, Some(false)), &src));
+
+        assert!(!op.evaluate(&make_plan(false, false, None), &src));
+        assert!(op.evaluate(&make_plan(false, true, None), &src));
+        assert!(op.evaluate(&make_plan(true, false, None), &src));
+        assert!(op.evaluate(&make_plan(true, true, None), &src));
+
+        assert!(op.evaluate(&make_plan(false, false, Some(true)), &src));
+        assert!(op.evaluate(&make_plan(false, true, Some(true)), &src));
+        assert!(op.evaluate(&make_plan(true, false, Some(true)), &src));
+        assert!(op.evaluate(&make_plan(true, true, Some(true)), &src));
+    }
+
+    #[test]
+    fn all_failure() {
+        let op = AllFailure;
+        let src = ["a".into(), "b".into(), "c".into()];
+        assert!(op.evaluate(&make_plan(false, false, Some(false)), &src));
+        assert!(!op.evaluate(&make_plan(false, true, Some(false)), &src));
+        assert!(!op.evaluate(&make_plan(true, false, Some(false)), &src));
+        assert!(!op.evaluate(&make_plan(true, true, Some(false)), &src));
+
+        assert!(!op.evaluate(&make_plan(false, false, None), &src));
+        assert!(!op.evaluate(&make_plan(false, true, None), &src));
+        assert!(!op.evaluate(&make_plan(true, false, None), &src));
+        assert!(!op.evaluate(&make_plan(true, true, None), &src));
+
+        assert!(!op.evaluate(&make_plan(false, false, Some(true)), &src));
+        assert!(!op.evaluate(&make_plan(false, true, Some(true)), &src));
+        assert!(!op.evaluate(&make_plan(true, false, Some(true)), &src));
+        assert!(!op.evaluate(&make_plan(true, true, Some(true)), &src));
+    }
+
+    #[test]
+    fn any_failure() {
+        let op = AnyFailure;
+        let src = ["a".into(), "b".into(), "c".into()];
+        assert!(op.evaluate(&make_plan(false, false, Some(false)), &src));
+        assert!(op.evaluate(&make_plan(false, true, Some(false)), &src));
+        assert!(op.evaluate(&make_plan(true, false, Some(false)), &src));
+        assert!(op.evaluate(&make_plan(true, true, Some(false)), &src));
+
+        assert!(op.evaluate(&make_plan(false, false, None), &src));
+        assert!(op.evaluate(&make_plan(false, true, None), &src));
+        assert!(op.evaluate(&make_plan(true, false, None), &src));
+        assert!(!op.evaluate(&make_plan(true, true, None), &src));
+
+        assert!(op.evaluate(&make_plan(false, false, Some(true)), &src));
+        assert!(op.evaluate(&make_plan(false, true, Some(true)), &src));
+        assert!(op.evaluate(&make_plan(true, false, Some(true)), &src));
+        assert!(!op.evaluate(&make_plan(true, true, Some(true)), &src));
     }
 }
