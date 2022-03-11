@@ -42,8 +42,8 @@ pub fn cast<T: Behaviour + 'static>(sm: &dyn Behaviour) -> Option<&T> {
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
-    pub from: Vec<String>,
-    pub to: Vec<String>,
+    pub src: Vec<String>,
+    pub dst: Vec<String>,
     pub predicate: Box<dyn Predicate>,
 }
 
@@ -194,14 +194,17 @@ impl Plan {
         transitions
             .iter()
             .filter(|t| {
-                t.from.len() == active_plans.len()
-                    && t.from.iter().all(|p| active_plans.contains(p))
+                t.src.len() == active_plans.len()
+                    && t.src.iter().all(|p| active_plans.contains(p))
+                    && t.predicate.evaluate(self)
             })
+            .collect::<Vec<_>>()
+            .iter()
             .for_each(|t| {
-                t.from.iter().filter(|p| !t.to.contains(p)).for_each(|p| {
+                t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
                     self.exit(p);
                 });
-                t.to.iter().filter(|p| !t.from.contains(p)).for_each(|p| {
+                t.dst.iter().filter(|p| !t.src.contains(p)).for_each(|p| {
                     self.enter(p);
                 });
             });
@@ -384,18 +387,18 @@ mod tests {
         let mut root_plan = new_plan("root", true);
         root_plan.transitions = vec![
             Transition {
-                from: vec!["A".into()],
-                to: vec!["B".into()],
+                src: vec!["A".into()],
+                dst: vec!["B".into()],
                 predicate: Box::new(Or(vec![Box::new(True), Box::new(False)])),
             },
             Transition {
-                from: vec!["B".into()],
-                to: vec!["C".into()],
+                src: vec!["B".into()],
+                dst: vec!["C".into()],
                 predicate: Box::new(True),
             },
             Transition {
-                from: vec!["C".into()],
-                to: vec!["A".into()],
+                src: vec!["C".into()],
+                dst: vec!["A".into()],
                 predicate: Box::new(True),
             },
         ];
