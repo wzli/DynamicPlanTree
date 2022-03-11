@@ -35,26 +35,71 @@ impl Behaviour for DefaultBehaviour {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn on_run(&mut self, plan: &mut Plan) {}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MultiBehaviour(Vec<Box<dyn Behaviour>>);
+#[typetag::serde]
+impl Behaviour for MultiBehaviour {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn on_run(&mut self, plan: &mut Plan) {
-        /*
+        for behaviour in &mut self.0 {
+            behaviour.on_run(plan);
+        }
+    }
+    fn on_entry(&mut self, plan: &mut Plan) {
+        for behaviour in &mut self.0 {
+            behaviour.on_entry(plan);
+        }
+    }
+    fn on_exit(&mut self, plan: &mut Plan) {
+        for behaviour in self.0.iter_mut().rev() {
+            behaviour.on_entry(plan);
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct EvalBehaviour(Box<dyn Predicate>, bool);
+#[typetag::serde]
+impl Behaviour for EvalBehaviour {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn on_run(&mut self, plan: &mut Plan) {
+        if self.0.evaluate(plan, &HashSet::new()) {
+            plan.status = Some(self.1);
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MaxUtilBehaviour;
+#[typetag::serde]
+impl Behaviour for MaxUtilBehaviour {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn on_run(&mut self, plan: &mut Plan) {
         // get highest utility plan
         let best = match plan.highest_utility() {
             Some((plan, _)) => plan.name().clone(),
             None => return,
         };
-        // get current plan
-        if let Some(cur) = &plan.status {
+        // get active plan
+        if let Some(Plan { name: active, .. }) = plan.plans.iter().find(|plan| plan.active) {
             // current plan is already best
-            if *cur == best {
+            if *active == best {
                 return;
             }
-            // exit previous plan
-            let cur = cur.clone();
-            plan.exit(&cur);
+            // exit active plan
+            let active = active.clone();
+            plan.exit(&active);
         }
         // enter new plan
         plan.enter(&best);
-        plan.status = Some(best);
-        */
     }
 }
