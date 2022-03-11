@@ -8,7 +8,7 @@ pub trait Behaviour: Send {
     // optional
     fn on_entry(&mut self, _plan: &mut Plan) {}
     fn on_exit(&mut self, _plan: &mut Plan) {}
-    fn utility(&mut self, plan: &mut Plan) -> f64 {
+    fn utility(&mut self, _plan: &mut Plan) -> f64 {
         0.
     }
 }
@@ -24,7 +24,7 @@ impl Behaviour for DefaultBehaviour {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn on_run(&mut self, plan: &mut Plan) {}
+    fn on_run(&mut self, _plan: &mut Plan) {}
 }
 
 #[derive(Serialize, Deserialize)]

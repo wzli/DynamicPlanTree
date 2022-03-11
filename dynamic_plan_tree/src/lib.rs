@@ -7,7 +7,7 @@ use predicate::*;
 use log::debug;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_yaml::Value;
+use serde_json::Value;
 use std::{
     any::Any,
     collections::HashSet,
@@ -24,11 +24,11 @@ pub struct Transition {
 #[derive(Serialize, Deserialize)]
 pub struct Plan {
     name: String,
-    pub behaviour: Box<dyn Behaviour>,
     active: bool,
     pub status: Option<bool>,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
+    pub behaviour: Box<dyn Behaviour>,
     pub transitions: Vec<Transition>,
     pub plans: Vec<Plan>,
     pub data: Value,
@@ -57,10 +57,10 @@ impl Plan {
     ) -> Self {
         let mut plan = Plan {
             name: name.into(),
-            behaviour,
-            run_interval,
-            status: None,
             active,
+            status: None,
+            run_interval,
+            behaviour,
             transitions: Vec::new(),
             plans: Vec::new(),
             data: Value::Null,
@@ -370,6 +370,6 @@ mod tests {
             };
             assert_eq!(sm.run_count, run_cycles);
         }
-        debug!("{}", serde_yaml::to_string(&root_plan).unwrap());
+        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }
 }
