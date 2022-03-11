@@ -136,14 +136,17 @@ impl Plan {
             .plans
             .iter()
             .filter(|plan| plan.active)
-            .map(|plan| plan.name.clone())
-            .collect::<HashSet<_>>();
+            .collect::<Vec<_>>();
 
         // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
         transitions
             .iter()
-            .filter(|t| t.src == active_plans && t.predicate.evaluate(self, &t.src))
+            .filter(|t| {
+                t.src.len() == active_plans.len()
+                    && active_plans.iter().all(|p| t.src.contains(&p.name))
+                    && t.predicate.evaluate(self, &t.src)
+            })
             .collect::<Vec<_>>()
             .iter()
             .for_each(|t| {
