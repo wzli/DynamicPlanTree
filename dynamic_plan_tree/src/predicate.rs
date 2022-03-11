@@ -99,7 +99,7 @@ pub struct AllSuccess;
 #[typetag::serde]
 impl Predicate for AllSuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        if src.len() == plan.plans.len() {
+        if src.is_empty() {
             plan.plans.iter().all(|p| p.status.unwrap_or(false))
         } else {
             src.iter()
@@ -114,7 +114,7 @@ pub struct AnySuccess;
 #[typetag::serde]
 impl Predicate for AnySuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        if src.len() == plan.plans.len() {
+        if src.is_empty() {
             plan.plans.iter().any(|p| p.status.unwrap_or(false))
         } else {
             src.iter()
@@ -129,7 +129,7 @@ pub struct AllFailure;
 #[typetag::serde]
 impl Predicate for AllFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        !if src.len() == plan.plans.len() {
+        !if src.is_empty() {
             plan.plans.iter().any(|p| p.status.unwrap_or(true))
         } else {
             src.iter()
@@ -144,7 +144,7 @@ pub struct AnyFailure;
 #[typetag::serde]
 impl Predicate for AnyFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        !if src.len() == plan.plans.len() {
+        !if src.is_empty() {
             plan.plans.iter().all(|p| p.status.unwrap_or(true))
         } else {
             src.iter()

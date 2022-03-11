@@ -272,7 +272,6 @@ impl Drop for Plan {
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use behaviour::*;
 
     #[derive(Serialize, Deserialize, Default)]
     struct TestBehaviour {
