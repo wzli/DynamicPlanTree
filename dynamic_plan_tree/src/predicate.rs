@@ -2,14 +2,14 @@ use crate::*;
 
 #[typetag::serde(tag = "type")]
 pub trait Predicate: Send {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool;
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool;
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct True;
 #[typetag::serde]
 impl Predicate for True {
-    fn evaluate(&self, _: &Plan, _: &[String]) -> bool {
+    fn evaluate(&self, _: &Plan, _: &HashSet<String>) -> bool {
         true
     }
 }
@@ -18,7 +18,7 @@ impl Predicate for True {
 pub struct False;
 #[typetag::serde]
 impl Predicate for False {
-    fn evaluate(&self, _: &Plan, _: &[String]) -> bool {
+    fn evaluate(&self, _: &Plan, _: &HashSet<String>) -> bool {
         false
     }
 }
@@ -27,7 +27,7 @@ impl Predicate for False {
 pub struct And(pub Vec<Box<dyn Predicate>>);
 #[typetag::serde]
 impl Predicate for And {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         self.0.iter().all(|pred| pred.evaluate(plan, src))
     }
 }
@@ -36,7 +36,7 @@ impl Predicate for And {
 pub struct Or(pub Vec<Box<dyn Predicate>>);
 #[typetag::serde]
 impl Predicate for Or {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         self.0.iter().any(|pred| pred.evaluate(plan, src))
     }
 }
@@ -45,7 +45,7 @@ impl Predicate for Or {
 pub struct Not(pub Box<dyn Predicate>);
 #[typetag::serde]
 impl Predicate for Not {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         !self.0.evaluate(plan, src)
     }
 }
@@ -54,7 +54,7 @@ impl Predicate for Not {
 pub struct Xor(pub Vec<Box<dyn Predicate>>);
 #[typetag::serde]
 impl Predicate for Xor {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         0 != 1 & self
             .0
             .iter()
@@ -67,7 +67,7 @@ impl Predicate for Xor {
 pub struct Nand(pub Vec<Box<dyn Predicate>>);
 #[typetag::serde]
 impl Predicate for Nand {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         !self.0.iter().all(|pred| pred.evaluate(plan, src))
     }
 }
@@ -76,7 +76,7 @@ impl Predicate for Nand {
 pub struct Nor(pub Vec<Box<dyn Predicate>>);
 #[typetag::serde]
 impl Predicate for Nor {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         !self.0.iter().any(|pred| pred.evaluate(plan, src))
     }
 }
@@ -85,7 +85,7 @@ impl Predicate for Nor {
 pub struct Xnor(pub Vec<Box<dyn Predicate>>);
 #[typetag::serde]
 impl Predicate for Xnor {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         0 == 1 & self
             .0
             .iter()
@@ -98,7 +98,7 @@ impl Predicate for Xnor {
 pub struct AllSuccess;
 #[typetag::serde]
 impl Predicate for AllSuccess {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         if src.is_empty() {
             plan.plans.iter().all(|p| p.status.unwrap_or(false))
         } else {
@@ -113,7 +113,7 @@ impl Predicate for AllSuccess {
 pub struct AnySuccess;
 #[typetag::serde]
 impl Predicate for AnySuccess {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         if src.is_empty() {
             plan.plans.iter().any(|p| p.status.unwrap_or(false))
         } else {
@@ -128,7 +128,7 @@ impl Predicate for AnySuccess {
 pub struct AllFailure;
 #[typetag::serde]
 impl Predicate for AllFailure {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         !if src.is_empty() {
             plan.plans.iter().any(|p| p.status.unwrap_or(true))
         } else {
@@ -143,7 +143,7 @@ impl Predicate for AllFailure {
 pub struct AnyFailure;
 #[typetag::serde]
 impl Predicate for AnyFailure {
-    fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
+    fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool {
         !if src.is_empty() {
             plan.plans.iter().all(|p| p.status.unwrap_or(true))
         } else {
@@ -161,62 +161,62 @@ mod tests {
     #[test]
     fn and() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!And(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!And(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(!And(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(And(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(!And(vec![Box::new(False), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(!And(vec![Box::new(False), Box::new(True)]).evaluate(&p, &HashSet::new()));
+        assert!(!And(vec![Box::new(True), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(And(vec![Box::new(True), Box::new(True)]).evaluate(&p, &HashSet::new()));
     }
 
     #[test]
     fn or() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!Or(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Or(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(Or(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Or(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(!Or(vec![Box::new(False), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(Or(vec![Box::new(False), Box::new(True)]).evaluate(&p, &HashSet::new()));
+        assert!(Or(vec![Box::new(True), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(Or(vec![Box::new(True), Box::new(True)]).evaluate(&p, &HashSet::new()));
     }
 
     #[test]
     fn not() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!Not(Box::new(True)).evaluate(&p, &[]));
-        assert!(Not(Box::new(False)).evaluate(&p, &[]));
+        assert!(!Not(Box::new(True)).evaluate(&p, &HashSet::new()));
+        assert!(Not(Box::new(False)).evaluate(&p, &HashSet::new()));
     }
 
     #[test]
     fn xor() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!Xor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Xor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(Xor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Xor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(!Xor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(Xor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &HashSet::new()));
+        assert!(Xor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(!Xor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &HashSet::new()));
     }
 
     #[test]
     fn nand() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(Nand(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Nand(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(Nand(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Nand(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(Nand(vec![Box::new(False), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(Nand(vec![Box::new(False), Box::new(True)]).evaluate(&p, &HashSet::new()));
+        assert!(Nand(vec![Box::new(True), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(!Nand(vec![Box::new(True), Box::new(True)]).evaluate(&p, &HashSet::new()));
     }
 
     #[test]
     fn nor() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(Nor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Nor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(!Nor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Nor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(Nor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(!Nor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &HashSet::new()));
+        assert!(!Nor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(!Nor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &HashSet::new()));
     }
 
     #[test]
     fn xnor() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(Xnor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Xnor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(!Xnor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Xnor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(Xnor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(!Xnor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &HashSet::new()));
+        assert!(!Xnor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &HashSet::new()));
+        assert!(Xnor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &HashSet::new()));
     }
 
     fn make_plan(a: bool, b: bool, c: Option<bool>) -> Plan {
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn all_success() {
         let op = AllSuccess;
-        let src = ["a".into(), "b".into(), "c".into()];
+        let src = HashSet::<String>::from(["a".into(), "b".into(), "c".into()]);
         assert!(!op.evaluate(&make_plan(false, false, Some(false)), &src));
         assert!(!op.evaluate(&make_plan(false, true, Some(false)), &src));
         assert!(!op.evaluate(&make_plan(true, false, Some(false)), &src));
@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn any_success() {
         let op = AnySuccess;
-        let src = ["a".into(), "b".into(), "c".into()];
+        let src = HashSet::<String>::from(["a".into(), "b".into(), "c".into()]);
         assert!(!op.evaluate(&make_plan(false, false, Some(false)), &src));
         assert!(op.evaluate(&make_plan(false, true, Some(false)), &src));
         assert!(op.evaluate(&make_plan(true, false, Some(false)), &src));
@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn all_failure() {
         let op = AllFailure;
-        let src = ["a".into(), "b".into(), "c".into()];
+        let src = HashSet::<String>::from(["a".into(), "b".into(), "c".into()]);
         assert!(op.evaluate(&make_plan(false, false, Some(false)), &src));
         assert!(!op.evaluate(&make_plan(false, true, Some(false)), &src));
         assert!(!op.evaluate(&make_plan(true, false, Some(false)), &src));
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn any_failure() {
         let op = AnyFailure;
-        let src = ["a".into(), "b".into(), "c".into()];
+        let src = HashSet::<String>::from(["a".into(), "b".into(), "c".into()]);
         assert!(op.evaluate(&make_plan(false, false, Some(false)), &src));
         assert!(op.evaluate(&make_plan(false, true, Some(false)), &src));
         assert!(op.evaluate(&make_plan(true, false, Some(false)), &src));

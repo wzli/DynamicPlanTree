@@ -16,8 +16,8 @@ use std::{
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
-    pub src: Vec<String>,
-    pub dst: Vec<String>,
+    pub src: HashSet<String>,
+    pub dst: HashSet<String>,
     pub predicate: Box<dyn Predicate>,
 }
 
@@ -136,27 +136,23 @@ impl Plan {
             .plans
             .iter()
             .filter(|plan| plan.active)
-            .map(|plan| &plan.name)
+            .map(|plan| plan.name.clone())
             .collect::<HashSet<_>>();
 
         // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
         transitions
             .iter()
-            .filter(|t| {
-                t.src.len() == active_plans.len()
-                    && t.src.iter().all(|p| active_plans.contains(p))
-                    && t.predicate.evaluate(self, &t.src)
-            })
+            .filter(|t| t.src == active_plans && t.predicate.evaluate(self, &t.src))
             .collect::<Vec<_>>()
             .iter()
             .for_each(|t| {
-                t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
-                    self.exit(p);
-                });
-                t.dst.iter().filter(|p| !t.src.contains(p)).for_each(|p| {
-                    self.enter(p);
-                });
+                for plan in t.src.difference(&t.dst) {
+                    self.exit(plan);
+                }
+                for plan in t.dst.difference(&t.src) {
+                    self.enter(plan);
+                }
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
@@ -338,18 +334,18 @@ mod tests {
         let mut root_plan = new_plan("root", true);
         root_plan.transitions = vec![
             Transition {
-                src: vec!["A".into()],
-                dst: vec!["B".into()],
+                src: HashSet::from(["A".into()]),
+                dst: HashSet::from(["B".into()]),
                 predicate: Box::new(Or(vec![Box::new(True), Box::new(False)])),
             },
             Transition {
-                src: vec!["B".into()],
-                dst: vec!["C".into()],
+                src: HashSet::from(["B".into()]),
+                dst: HashSet::from(["C".into()]),
                 predicate: Box::new(True),
             },
             Transition {
-                src: vec!["C".into()],
-                dst: vec!["A".into()],
+                src: HashSet::from(["C".into()]),
+                dst: HashSet::from(["A".into()]),
                 predicate: Box::new(True),
             },
         ];
