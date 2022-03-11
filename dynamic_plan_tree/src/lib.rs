@@ -214,22 +214,6 @@ impl Plan {
         self.call("on_exit", |behaviour, plan| behaviour.on_exit(plan));
     }
 
-    pub fn highest_utility(&mut self) -> Option<(&Plan, f64)> {
-        if self.plans.is_empty() {
-            None
-        } else {
-            let (pos, utility) = self
-                .plans
-                .par_iter_mut()
-                .map(|plan| plan.call("utility", |behaviour, plan| behaviour.utility(plan, false)))
-                .enumerate()
-                .collect::<Vec<_>>()
-                .into_iter()
-                .fold((0, f64::NAN), |max, x| if max.1 > x.1 { max } else { x });
-            Some((&self.plans[pos], utility))
-        }
-    }
-
     pub fn debug_log(&self, pre: &str, tag: &str) {
         debug!(
             "{:?}\t{}\t{} {}\t{:?}\t{:?}",

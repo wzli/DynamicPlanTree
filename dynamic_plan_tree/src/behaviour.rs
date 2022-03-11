@@ -8,19 +8,8 @@ pub trait Behaviour: Send {
     // optional
     fn on_entry(&mut self, _plan: &mut Plan) {}
     fn on_exit(&mut self, _plan: &mut Plan) {}
-    fn utility(&mut self, plan: &mut Plan, filter_active: bool) -> f64 {
-        plan.plans
-            .iter_mut()
-            .filter(|plan| !filter_active || plan.active)
-            .par_bridge()
-            .map(|plan| {
-                plan.call("utility", |behaviour, plan| {
-                    behaviour.utility(plan, filter_active)
-                })
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .fold(f64::NAN, f64::max)
+    fn utility(&mut self, plan: &mut Plan) -> f64 {
+        0.
     }
 }
 
@@ -60,6 +49,12 @@ impl Behaviour for MultiBehaviour {
             behaviour.on_entry(plan);
         }
     }
+    fn utility(&mut self, plan: &mut Plan) -> f64 {
+        self.0
+            .iter_mut()
+            .map(|behaviour| behaviour.utility(plan))
+            .sum()
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,7 +82,7 @@ impl Behaviour for MaxUtilBehaviour {
     }
     fn on_run(&mut self, plan: &mut Plan) {
         // get highest utility plan
-        let best = match plan.highest_utility() {
+        let best = match max_utility(&mut plan.plans) {
             Some((plan, _)) => plan.name().clone(),
             None => return,
         };
@@ -103,5 +98,26 @@ impl Behaviour for MaxUtilBehaviour {
         }
         // enter new plan
         plan.enter(&best);
+    }
+    fn utility(&mut self, plan: &mut Plan) -> f64 {
+        match max_utility(&mut plan.plans) {
+            Some((_, util)) => util,
+            None => 0.,
+        }
+    }
+}
+
+pub fn max_utility(plans: &mut Vec<Plan>) -> Option<(&Plan, f64)> {
+    if plans.is_empty() {
+        None
+    } else {
+        let (pos, utility) = plans
+            .par_iter_mut()
+            .map(|plan| plan.call("utility", |behaviour, plan| behaviour.utility(plan)))
+            .enumerate()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .fold((0, f64::NAN), |max, x| if max.1 > x.1 { max } else { x });
+        Some((&plans[pos], utility))
     }
 }
