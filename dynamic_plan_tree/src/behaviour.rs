@@ -70,7 +70,9 @@ impl Behaviour for EvalBehaviour {
         self
     }
     fn on_run(&mut self, plan: &mut Plan) {
-        if self.0.evaluate(plan, &HashSet::new()) {
+        if plan.status.is_some() {
+            return;
+        } else if self.0.evaluate(plan, &HashSet::new()) {
             plan.status = Some(self.1);
         }
     }
