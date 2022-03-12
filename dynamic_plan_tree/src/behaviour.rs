@@ -21,7 +21,7 @@ impl Behaviour for DefaultBehaviour {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MultiBehaviour(Vec<Box<dyn Behaviour>>);
+pub struct MultiBehaviour(pub Vec<Box<dyn Behaviour>>);
 #[typetag::serde]
 impl Behaviour for MultiBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
@@ -48,7 +48,7 @@ impl Behaviour for MultiBehaviour {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EvalBehaviour(Box<dyn Predicate>, Box<dyn Predicate>);
+pub struct EvalBehaviour(pub Box<dyn Predicate>, pub Box<dyn Predicate>);
 #[typetag::serde]
 impl Behaviour for EvalBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
