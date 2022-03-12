@@ -1,9 +1,8 @@
 use crate::*;
 
 #[typetag::serde(tag = "type")]
-pub trait Behaviour: Send {
+pub trait Behaviour: Send + Downcast {
     // required
-    fn as_any(&self) -> &dyn Any;
     fn on_run(&mut self, _plan: &mut Plan);
     // optional
     fn on_entry(&mut self, _plan: &mut Plan) {}
@@ -12,18 +11,12 @@ pub trait Behaviour: Send {
         0.
     }
 }
-
-pub fn cast<T: Behaviour + 'static>(sm: &dyn Behaviour) -> Option<&T> {
-    sm.as_any().downcast_ref::<T>()
-}
+impl_downcast!(Behaviour);
 
 #[derive(Serialize, Deserialize)]
 pub struct DefaultBehaviour;
 #[typetag::serde]
 impl Behaviour for DefaultBehaviour {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn on_run(&mut self, _plan: &mut Plan) {}
 }
 
@@ -31,9 +24,6 @@ impl Behaviour for DefaultBehaviour {
 pub struct MultiBehaviour(Vec<Box<dyn Behaviour>>);
 #[typetag::serde]
 impl Behaviour for MultiBehaviour {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn on_run(&mut self, plan: &mut Plan) {
         for behaviour in &mut self.0 {
             behaviour.on_run(plan);
@@ -61,9 +51,6 @@ impl Behaviour for MultiBehaviour {
 pub struct EvalBehaviour(Box<dyn Predicate>, Box<dyn Predicate>);
 #[typetag::serde]
 impl Behaviour for EvalBehaviour {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn on_run(&mut self, plan: &mut Plan) {
         plan.status = if self.1.evaluate(plan, &HashSet::new()) {
             Some(false)
@@ -79,9 +66,6 @@ impl Behaviour for EvalBehaviour {
 pub struct SequenceBehaviour;
 #[typetag::serde]
 impl Behaviour for SequenceBehaviour {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn on_run(&mut self, plan: &mut Plan) {
         plan.status = if AnyFailure.evaluate(plan, &HashSet::new()) {
             Some(false)
@@ -97,9 +81,6 @@ impl Behaviour for SequenceBehaviour {
 pub struct FallbackBehaviour;
 #[typetag::serde]
 impl Behaviour for FallbackBehaviour {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn on_run(&mut self, plan: &mut Plan) {
         plan.status = if AllFailure.evaluate(plan, &HashSet::new()) {
             Some(false)
@@ -115,9 +96,6 @@ impl Behaviour for FallbackBehaviour {
 pub struct MaxUtilBehaviour;
 #[typetag::serde]
 impl Behaviour for MaxUtilBehaviour {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn on_run(&mut self, plan: &mut Plan) {
         // get highest utility plan
         let best = match max_utility(&mut plan.plans) {

@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate downcast_rs;
+use downcast_rs::Downcast;
+
 mod behaviour;
 mod predicate;
 
@@ -9,7 +13,6 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    any::Any,
     collections::HashSet,
     time::{Duration, Instant},
 };
@@ -265,9 +268,6 @@ mod tests {
 
     #[typetag::serde]
     impl Behaviour for TestBehaviour {
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
         fn on_entry(&mut self, _plan: &mut Plan) {
             self.entry_count += 1;
         }
@@ -302,7 +302,7 @@ mod tests {
         for (i, plan) in root_plan.plans.iter().enumerate() {
             assert!(plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
-            let sm = cast::<TestBehaviour>(&*plan.behaviour).unwrap();
+            let sm = plan.behaviour.downcast_ref::<TestBehaviour>().unwrap();
             assert_eq!(sm.entry_count, 1);
             assert_eq!(sm.run_count, 0);
             assert_eq!(sm.exit_count, 0);
@@ -310,7 +310,7 @@ mod tests {
         root_plan.exit_all();
         for plan in &root_plan.plans {
             assert!(!plan.active());
-            let sm = cast::<TestBehaviour>(&*plan.behaviour).unwrap();
+            let sm = plan.behaviour.downcast_ref::<TestBehaviour>().unwrap();
             assert_eq!(sm.exit_count, 1);
         }
     }
@@ -359,7 +359,7 @@ mod tests {
         }
         root_plan.exit_all();
         for plan in &root_plan.plans {
-            let sm = cast::<TestBehaviour>(&*plan.behaviour).unwrap();
+            let sm = plan.behaviour.downcast_ref::<TestBehaviour>().unwrap();
             assert_eq!(sm.entry_count, cycles);
             assert_eq!(sm.exit_count, cycles);
             // off by one becase inital plan didn't run

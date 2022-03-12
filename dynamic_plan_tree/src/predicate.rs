@@ -1,9 +1,10 @@
 use crate::*;
 
 #[typetag::serde(tag = "type")]
-pub trait Predicate: Send {
+pub trait Predicate: Send + Downcast {
     fn evaluate(&self, plan: &Plan, src: &HashSet<String>) -> bool;
 }
+impl_downcast!(Predicate);
 
 #[derive(Serialize, Deserialize)]
 pub struct True;
