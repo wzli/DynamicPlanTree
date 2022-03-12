@@ -58,17 +58,55 @@ impl Behaviour for MultiBehaviour {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EvalBehaviour(Box<dyn Predicate>, bool);
+pub struct EvalBehaviour(Box<dyn Predicate>, Box<dyn Predicate>);
 #[typetag::serde]
 impl Behaviour for EvalBehaviour {
     fn as_any(&self) -> &dyn Any {
         self
     }
     fn on_run(&mut self, plan: &mut Plan) {
-        if plan.status.is_some() {
-            return;
+        plan.status = if self.1.evaluate(plan, &HashSet::new()) {
+            Some(false)
         } else if self.0.evaluate(plan, &HashSet::new()) {
-            plan.status = Some(self.1);
+            Some(true)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SequenceBehaviour;
+#[typetag::serde]
+impl Behaviour for SequenceBehaviour {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn on_run(&mut self, plan: &mut Plan) {
+        plan.status = if AnyFailure.evaluate(plan, &HashSet::new()) {
+            Some(false)
+        } else if AllSuccess.evaluate(plan, &HashSet::new()) {
+            Some(true)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FallbackBehaviour;
+#[typetag::serde]
+impl Behaviour for FallbackBehaviour {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn on_run(&mut self, plan: &mut Plan) {
+        plan.status = if AllFailure.evaluate(plan, &HashSet::new()) {
+            Some(false)
+        } else if AnySuccess.evaluate(plan, &HashSet::new()) {
+            Some(true)
+        } else {
+            None
         }
     }
 }
