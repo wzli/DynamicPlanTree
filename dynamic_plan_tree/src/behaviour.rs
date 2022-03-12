@@ -2,23 +2,22 @@ use crate::*;
 
 #[typetag::serde(tag = "type")]
 pub trait Behaviour: Send + Downcast {
-    // required
-    fn on_run(&mut self, _plan: &mut Plan);
-    // optional
-    fn on_entry(&mut self, _plan: &mut Plan) {}
-    fn on_exit(&mut self, _plan: &mut Plan) {}
+    fn status(&self, _plan: &Plan) -> Option<bool> {
+        None
+    }
     fn utility(&mut self, _plan: &mut Plan) -> f64 {
         0.
     }
+    fn on_run(&mut self, _plan: &mut Plan) {}
+    fn on_entry(&mut self, _plan: &mut Plan) {}
+    fn on_exit(&mut self, _plan: &mut Plan) {}
 }
 impl_downcast!(Behaviour);
 
 #[derive(Serialize, Deserialize)]
 pub struct DefaultBehaviour;
 #[typetag::serde]
-impl Behaviour for DefaultBehaviour {
-    fn on_run(&mut self, _plan: &mut Plan) {}
-}
+impl Behaviour for DefaultBehaviour {}
 
 #[derive(Serialize, Deserialize)]
 pub struct MultiBehaviour(pub Vec<Box<dyn Behaviour>>);
@@ -51,8 +50,8 @@ impl Behaviour for MultiBehaviour {
 pub struct EvalBehaviour(pub Box<dyn Predicate>, pub Box<dyn Predicate>);
 #[typetag::serde]
 impl Behaviour for EvalBehaviour {
-    fn on_run(&mut self, plan: &mut Plan) {
-        plan.status = if self.1.evaluate(plan, &[]) {
+    fn status(&self, plan: &Plan) -> Option<bool> {
+        if self.1.evaluate(plan, &[]) {
             Some(false)
         } else if self.0.evaluate(plan, &[]) {
             Some(true)
@@ -66,8 +65,8 @@ impl Behaviour for EvalBehaviour {
 pub struct SequenceBehaviour;
 #[typetag::serde]
 impl Behaviour for SequenceBehaviour {
-    fn on_run(&mut self, plan: &mut Plan) {
-        plan.status = if AnyFailure.evaluate(plan, &[]) {
+    fn status(&self, plan: &Plan) -> Option<bool> {
+        if AnyFailure.evaluate(plan, &[]) {
             Some(false)
         } else if AllSuccess.evaluate(plan, &[]) {
             Some(true)
@@ -81,8 +80,8 @@ impl Behaviour for SequenceBehaviour {
 pub struct FallbackBehaviour;
 #[typetag::serde]
 impl Behaviour for FallbackBehaviour {
-    fn on_run(&mut self, plan: &mut Plan) {
-        plan.status = if AllFailure.evaluate(plan, &[]) {
+    fn status(&self, plan: &Plan) -> Option<bool> {
+        if AllFailure.evaluate(plan, &[]) {
             Some(false)
         } else if AnySuccess.evaluate(plan, &[]) {
             Some(true)

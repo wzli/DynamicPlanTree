@@ -101,11 +101,13 @@ pub struct AllSuccess;
 impl Predicate for AllSuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         if src.is_empty() {
-            plan.plans.iter().all(|p| p.status.unwrap_or(false))
+            plan.plans
+                .iter()
+                .all(|p| p.behaviour.status(&p).unwrap_or(false))
         } else {
             src.iter()
                 .filter_map(|p| plan.get(p))
-                .all(|p| p.status.unwrap_or(false))
+                .all(|p| p.behaviour.status(&p).unwrap_or(false))
         }
     }
 }
@@ -116,11 +118,13 @@ pub struct AnySuccess;
 impl Predicate for AnySuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         if src.is_empty() {
-            plan.plans.iter().any(|p| p.status.unwrap_or(false))
+            plan.plans
+                .iter()
+                .any(|p| p.behaviour.status(&p).unwrap_or(false))
         } else {
             src.iter()
                 .filter_map(|p| plan.get(p))
-                .any(|p| p.status.unwrap_or(false))
+                .any(|p| p.behaviour.status(&p).unwrap_or(false))
         }
     }
 }
@@ -131,11 +135,13 @@ pub struct AllFailure;
 impl Predicate for AllFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !if src.is_empty() {
-            plan.plans.iter().any(|p| p.status.unwrap_or(true))
+            plan.plans
+                .iter()
+                .any(|p| p.behaviour.status(&p).unwrap_or(true))
         } else {
             src.iter()
                 .filter_map(|p| plan.get(p))
-                .any(|p| p.status.unwrap_or(true))
+                .any(|p| p.behaviour.status(&p).unwrap_or(true))
         }
     }
 }
@@ -146,11 +152,13 @@ pub struct AnyFailure;
 impl Predicate for AnyFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !if src.is_empty() {
-            plan.plans.iter().all(|p| p.status.unwrap_or(true))
+            plan.plans
+                .iter()
+                .all(|p| p.behaviour.status(&p).unwrap_or(true))
         } else {
             src.iter()
                 .filter_map(|p| plan.get(p))
-                .all(|p| p.status.unwrap_or(true))
+                .all(|p| p.behaviour.status(&p).unwrap_or(true))
         }
     }
 }
@@ -220,29 +228,35 @@ mod tests {
         assert!(Xnor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
     }
 
+    #[derive(Serialize, Deserialize)]
+    pub struct TestBehaviour(pub Option<bool>);
+    #[typetag::serde]
+    impl Behaviour for TestBehaviour {
+        fn status(&self, _: &Plan) -> Option<bool> {
+            self.0
+        }
+    }
+
     fn make_plan(a: bool, b: bool, c: Option<bool>) -> Plan {
         let mut p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
         p.insert(Plan::new(
-            Box::new(DefaultBehaviour),
+            Box::new(TestBehaviour(Some(a))),
             "a",
             false,
             Duration::new(0, 0),
         ));
         p.insert(Plan::new(
-            Box::new(DefaultBehaviour),
+            Box::new(TestBehaviour(Some(b))),
             "b",
             false,
             Duration::new(0, 0),
         ));
         p.insert(Plan::new(
-            Box::new(DefaultBehaviour),
+            Box::new(TestBehaviour(c)),
             "c",
             false,
             Duration::new(0, 0),
         ));
-        p.get_mut("a").unwrap().status = Some(a);
-        p.get_mut("b").unwrap().status = Some(b);
-        p.get_mut("c").unwrap().status = c;
         p
     }
 

@@ -25,7 +25,6 @@ pub struct Transition {
 pub struct Plan {
     name: String,
     active: bool,
-    pub status: Option<bool>,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
     pub behaviour: Box<dyn Behaviour>,
@@ -58,7 +57,6 @@ impl Plan {
         let mut plan = Plan {
             name: name.into(),
             active,
-            status: None,
             run_interval,
             behaviour,
             transitions: Vec::new(),
@@ -176,7 +174,6 @@ impl Plan {
                 // if plan is inactive, set as active and call on_entry()
                 if !plan.active {
                     plan.active = true;
-                    plan.status = None;
                     plan.call("on_entry", |behaviour, plan| behaviour.on_entry(plan));
                 }
                 Some(plan)
@@ -222,7 +219,7 @@ impl Plan {
             self.name,
             pre,
             tag,
-            self.status,
+            self.behaviour.status(self),
             self.plans
                 .iter()
                 .filter(|plan| plan.active)
