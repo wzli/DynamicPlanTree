@@ -5,7 +5,7 @@ pub trait Behaviour: Send + Downcast {
     fn status(&self, _plan: &Plan) -> Option<bool> {
         None
     }
-    fn utility(&mut self, _plan: &mut Plan) -> f64 {
+    fn utility(&self, _plan: &Plan) -> f64 {
         0.
     }
     fn on_run(&mut self, _plan: &mut Plan) {}
@@ -38,11 +38,8 @@ impl Behaviour for MultiBehaviour {
             behaviour.on_entry(plan);
         }
     }
-    fn utility(&mut self, plan: &mut Plan) -> f64 {
-        self.0
-            .iter_mut()
-            .map(|behaviour| behaviour.utility(plan))
-            .sum()
+    fn utility(&self, plan: &Plan) -> f64 {
+        self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
     }
 }
 
@@ -97,7 +94,7 @@ pub struct MaxUtilBehaviour;
 impl Behaviour for MaxUtilBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
         // get highest utility plan
-        let best = match max_utility(&mut plan.plans) {
+        let best = match max_utility(&plan.plans) {
             Some((plan, _)) => plan.name().clone(),
             None => return,
         };
@@ -114,24 +111,22 @@ impl Behaviour for MaxUtilBehaviour {
         // enter new plan
         plan.enter(&best);
     }
-    fn utility(&mut self, plan: &mut Plan) -> f64 {
-        match max_utility(&mut plan.plans) {
+    fn utility(&self, plan: &Plan) -> f64 {
+        match max_utility(&plan.plans) {
             Some((_, util)) => util,
             None => 0.,
         }
     }
 }
 
-pub fn max_utility(plans: &mut Vec<Plan>) -> Option<(&Plan, f64)> {
+pub fn max_utility(plans: &Vec<Plan>) -> Option<(&Plan, f64)> {
     if plans.is_empty() {
         None
     } else {
         let (pos, utility) = plans
-            .par_iter_mut()
-            .map(|plan| plan.call("utility", |behaviour, plan| behaviour.utility(plan)))
+            .iter()
+            .map(|plan| plan.behaviour.utility(plan))
             .enumerate()
-            .collect::<Vec<_>>()
-            .into_iter()
             .fold((0, f64::NAN), |max, x| if max.1 > x.1 { max } else { x });
         Some((&plans[pos], utility))
     }
