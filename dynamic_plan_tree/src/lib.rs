@@ -12,15 +12,12 @@ use log::debug;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{
-    collections::HashSet,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
-    pub src: HashSet<String>,
-    pub dst: HashSet<String>,
+    pub src: Vec<String>,
+    pub dst: Vec<String>,
     pub predicate: Box<dyn Predicate>,
 }
 
@@ -135,30 +132,31 @@ impl Plan {
         self.timestamp = Instant::now();
 
         // get active set of plans
+        use std::collections::HashSet;
         let active_plans = self
             .plans
             .iter()
             .filter(|plan| plan.active)
-            .collect::<Vec<_>>();
+            .map(|plan| &plan.name)
+            .collect::<HashSet<_>>();
 
         // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
         transitions
             .iter()
             .filter(|t| {
-                t.src.len() == active_plans.len()
-                    && active_plans.iter().all(|p| t.src.contains(&p.name))
+                t.src.iter().all(|plan| active_plans.contains(plan))
                     && t.predicate.evaluate(self, &t.src)
             })
             .collect::<Vec<_>>()
             .iter()
             .for_each(|t| {
-                for plan in t.src.difference(&t.dst) {
-                    self.exit(plan);
-                }
-                for plan in t.dst.difference(&t.src) {
-                    self.enter(plan);
-                }
+                t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
+                    self.exit(p);
+                });
+                t.dst.iter().filter(|p| !t.src.contains(p)).for_each(|p| {
+                    self.enter(p);
+                });
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
@@ -321,18 +319,18 @@ mod tests {
         let mut root_plan = new_plan("root", true);
         root_plan.transitions = vec![
             Transition {
-                src: HashSet::from(["A".into()]),
-                dst: HashSet::from(["B".into()]),
+                src: vec!["A".into()],
+                dst: vec!["B".into()],
                 predicate: Box::new(Or(vec![Box::new(True), Box::new(False)])),
             },
             Transition {
-                src: HashSet::from(["B".into()]),
-                dst: HashSet::from(["C".into()]),
+                src: vec!["B".into()],
+                dst: vec!["C".into()],
                 predicate: Box::new(True),
             },
             Transition {
-                src: HashSet::from(["C".into()]),
-                dst: HashSet::from(["A".into()]),
+                src: vec!["C".into()],
+                dst: vec!["A".into()],
                 predicate: Box::new(True),
             },
         ];

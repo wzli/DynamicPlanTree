@@ -52,9 +52,9 @@ pub struct EvalBehaviour(pub Box<dyn Predicate>, pub Box<dyn Predicate>);
 #[typetag::serde]
 impl Behaviour for EvalBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
-        plan.status = if self.1.evaluate(plan, &HashSet::new()) {
+        plan.status = if self.1.evaluate(plan, &[]) {
             Some(false)
-        } else if self.0.evaluate(plan, &HashSet::new()) {
+        } else if self.0.evaluate(plan, &[]) {
             Some(true)
         } else {
             None
@@ -67,9 +67,9 @@ pub struct SequenceBehaviour;
 #[typetag::serde]
 impl Behaviour for SequenceBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
-        plan.status = if AnyFailure.evaluate(plan, &HashSet::new()) {
+        plan.status = if AnyFailure.evaluate(plan, &[]) {
             Some(false)
-        } else if AllSuccess.evaluate(plan, &HashSet::new()) {
+        } else if AllSuccess.evaluate(plan, &[]) {
             Some(true)
         } else {
             None
@@ -82,9 +82,9 @@ pub struct FallbackBehaviour;
 #[typetag::serde]
 impl Behaviour for FallbackBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
-        plan.status = if AllFailure.evaluate(plan, &HashSet::new()) {
+        plan.status = if AllFailure.evaluate(plan, &[]) {
             Some(false)
-        } else if AnySuccess.evaluate(plan, &HashSet::new()) {
+        } else if AnySuccess.evaluate(plan, &[]) {
             Some(true)
         } else {
             None
