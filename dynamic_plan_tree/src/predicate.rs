@@ -1,14 +1,31 @@
 use crate::*;
 
-#[typetag::serde(tag = "type")]
+#[enum_dispatch]
+#[derive(Serialize, Deserialize)]
+pub enum PredicateEnum {
+    True,
+    False,
+    And,
+    Or,
+    Xor,
+    Not,
+    Nand,
+    Nor,
+    Xnor,
+
+    AllSuccess,
+    AnySuccess,
+    AllFailure,
+    AnyFailure,
+}
+
+#[enum_dispatch(PredicateEnum)]
 pub trait Predicate: Send + Downcast {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool;
 }
-impl_downcast!(Predicate);
 
 #[derive(Serialize, Deserialize)]
 pub struct True;
-#[typetag::serde]
 impl Predicate for True {
     fn evaluate(&self, _: &Plan, _: &[String]) -> bool {
         true
@@ -17,7 +34,6 @@ impl Predicate for True {
 
 #[derive(Serialize, Deserialize)]
 pub struct False;
-#[typetag::serde]
 impl Predicate for False {
     fn evaluate(&self, _: &Plan, _: &[String]) -> bool {
         false
@@ -25,8 +41,7 @@ impl Predicate for False {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct And(pub Vec<Box<dyn Predicate>>);
-#[typetag::serde]
+pub struct And(pub Vec<PredicateEnum>);
 impl Predicate for And {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         self.0.iter().all(|pred| pred.evaluate(plan, src))
@@ -34,8 +49,7 @@ impl Predicate for And {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Or(pub Vec<Box<dyn Predicate>>);
-#[typetag::serde]
+pub struct Or(pub Vec<PredicateEnum>);
 impl Predicate for Or {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         self.0.iter().any(|pred| pred.evaluate(plan, src))
@@ -43,8 +57,7 @@ impl Predicate for Or {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Not(pub Box<dyn Predicate>);
-#[typetag::serde]
+pub struct Not(pub Box<PredicateEnum>);
 impl Predicate for Not {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !self.0.evaluate(plan, src)
@@ -52,8 +65,7 @@ impl Predicate for Not {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Xor(pub Vec<Box<dyn Predicate>>);
-#[typetag::serde]
+pub struct Xor(pub Vec<PredicateEnum>);
 impl Predicate for Xor {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         0 != 1 & self
@@ -65,8 +77,7 @@ impl Predicate for Xor {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Nand(pub Vec<Box<dyn Predicate>>);
-#[typetag::serde]
+pub struct Nand(pub Vec<PredicateEnum>);
 impl Predicate for Nand {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !self.0.iter().all(|pred| pred.evaluate(plan, src))
@@ -74,8 +85,7 @@ impl Predicate for Nand {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Nor(pub Vec<Box<dyn Predicate>>);
-#[typetag::serde]
+pub struct Nor(pub Vec<PredicateEnum>);
 impl Predicate for Nor {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !self.0.iter().any(|pred| pred.evaluate(plan, src))
@@ -83,8 +93,7 @@ impl Predicate for Nor {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Xnor(pub Vec<Box<dyn Predicate>>);
-#[typetag::serde]
+pub struct Xnor(pub Vec<PredicateEnum>);
 impl Predicate for Xnor {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         0 == 1 & self
@@ -97,7 +106,6 @@ impl Predicate for Xnor {
 
 #[derive(Serialize, Deserialize)]
 pub struct AllSuccess;
-#[typetag::serde]
 impl Predicate for AllSuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         if src.is_empty() {
@@ -114,7 +122,6 @@ impl Predicate for AllSuccess {
 
 #[derive(Serialize, Deserialize)]
 pub struct AnySuccess;
-#[typetag::serde]
 impl Predicate for AnySuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         if src.is_empty() {
@@ -131,7 +138,6 @@ impl Predicate for AnySuccess {
 
 #[derive(Serialize, Deserialize)]
 pub struct AllFailure;
-#[typetag::serde]
 impl Predicate for AllFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !if src.is_empty() {
@@ -148,7 +154,6 @@ impl Predicate for AllFailure {
 
 #[derive(Serialize, Deserialize)]
 pub struct AnyFailure;
-#[typetag::serde]
 impl Predicate for AnyFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
         !if src.is_empty() {
@@ -170,62 +175,62 @@ mod tests {
     #[test]
     fn and() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!And(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!And(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(!And(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(And(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(!And(vec![False.into(), False.into()]).evaluate(&p, &[]));
+        assert!(!And(vec![False.into(), True.into()]).evaluate(&p, &[]));
+        assert!(!And(vec![True.into(), False.into()]).evaluate(&p, &[]));
+        assert!(And(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
     #[test]
     fn or() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!Or(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Or(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(Or(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Or(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(!Or(vec![False.into(), False.into()]).evaluate(&p, &[]));
+        assert!(Or(vec![False.into(), True.into()]).evaluate(&p, &[]));
+        assert!(Or(vec![True.into(), False.into()]).evaluate(&p, &[]));
+        assert!(Or(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
     #[test]
     fn not() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!Not(Box::new(True)).evaluate(&p, &[]));
-        assert!(Not(Box::new(False)).evaluate(&p, &[]));
+        assert!(!Not(Box::new(True.into())).evaluate(&p, &[]));
+        assert!(Not(Box::new(False.into())).evaluate(&p, &[]));
     }
 
     #[test]
     fn xor() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(!Xor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Xor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(Xor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Xor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(!Xor(vec![False.into(), False.into()]).evaluate(&p, &[]));
+        assert!(Xor(vec![False.into(), True.into()]).evaluate(&p, &[]));
+        assert!(Xor(vec![True.into(), False.into()]).evaluate(&p, &[]));
+        assert!(!Xor(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
     #[test]
     fn nand() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(Nand(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Nand(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(Nand(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Nand(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(Nand(vec![False.into(), False.into()]).evaluate(&p, &[]));
+        assert!(Nand(vec![False.into(), True.into()]).evaluate(&p, &[]));
+        assert!(Nand(vec![True.into(), False.into()]).evaluate(&p, &[]));
+        assert!(!Nand(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
     #[test]
     fn nor() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(Nor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Nor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(!Nor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Nor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(Nor(vec![False.into(), False.into()]).evaluate(&p, &[]));
+        assert!(!Nor(vec![False.into(), True.into()]).evaluate(&p, &[]));
+        assert!(!Nor(vec![True.into(), False.into()]).evaluate(&p, &[]));
+        assert!(!Nor(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
     #[test]
     fn xnor() {
         let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
-        assert!(Xnor(vec![Box::new(False), Box::new(False)]).evaluate(&p, &[]));
-        assert!(!Xnor(vec![Box::new(False), Box::new(True)]).evaluate(&p, &[]));
-        assert!(!Xnor(vec![Box::new(True), Box::new(False)]).evaluate(&p, &[]));
-        assert!(Xnor(vec![Box::new(True), Box::new(True)]).evaluate(&p, &[]));
+        assert!(Xnor(vec![False.into(), False.into()]).evaluate(&p, &[]));
+        assert!(!Xnor(vec![False.into(), True.into()]).evaluate(&p, &[]));
+        assert!(!Xnor(vec![True.into(), False.into()]).evaluate(&p, &[]));
+        assert!(Xnor(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
     #[derive(Serialize, Deserialize)]

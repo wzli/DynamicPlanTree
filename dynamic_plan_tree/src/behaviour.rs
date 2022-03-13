@@ -1,6 +1,6 @@
 use crate::*;
 
-#[typetag::serde(tag = "type")]
+#[typetag::serde]
 pub trait Behaviour: Send + Downcast {
     fn status(&self, _plan: &Plan) -> Option<bool> {
         None
@@ -44,7 +44,7 @@ impl Behaviour for MultiBehaviour {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EvalBehaviour(pub Box<dyn Predicate>, pub Box<dyn Predicate>);
+pub struct EvalBehaviour(pub PredicateEnum, pub PredicateEnum);
 #[typetag::serde]
 impl Behaviour for EvalBehaviour {
     fn status(&self, plan: &Plan) -> Option<bool> {
@@ -63,13 +63,7 @@ pub struct SequenceBehaviour;
 #[typetag::serde]
 impl Behaviour for SequenceBehaviour {
     fn status(&self, plan: &Plan) -> Option<bool> {
-        if AnyFailure.evaluate(plan, &[]) {
-            Some(false)
-        } else if AllSuccess.evaluate(plan, &[]) {
-            Some(true)
-        } else {
-            None
-        }
+        EvalBehaviour(AllSuccess.into(), AnyFailure.into()).status(plan)
     }
 }
 
@@ -78,13 +72,7 @@ pub struct FallbackBehaviour;
 #[typetag::serde]
 impl Behaviour for FallbackBehaviour {
     fn status(&self, plan: &Plan) -> Option<bool> {
-        if AllFailure.evaluate(plan, &[]) {
-            Some(false)
-        } else if AnySuccess.evaluate(plan, &[]) {
-            Some(true)
-        } else {
-            None
-        }
+        EvalBehaviour(AnySuccess.into(), AllFailure.into()).status(plan)
     }
 }
 

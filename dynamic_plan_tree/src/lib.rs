@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate downcast_rs;
 use downcast_rs::Downcast;
+use enum_dispatch::enum_dispatch;
 
 mod behaviour;
 mod predicate;
@@ -18,7 +19,7 @@ use std::time::{Duration, Instant};
 pub struct Transition {
     pub src: Vec<String>,
     pub dst: Vec<String>,
-    pub predicate: Box<dyn Predicate>,
+    pub predicate: PredicateEnum,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -318,17 +319,17 @@ mod tests {
             Transition {
                 src: vec!["A".into()],
                 dst: vec!["B".into()],
-                predicate: Box::new(Or(vec![Box::new(True), Box::new(False)])),
+                predicate: Or(vec![True.into(), False.into()]).into(),
             },
             Transition {
                 src: vec!["B".into()],
                 dst: vec!["C".into()],
-                predicate: Box::new(True),
+                predicate: True.into(),
             },
             Transition {
                 src: vec!["C".into()],
                 dst: vec!["A".into()],
-                predicate: Box::new(True),
+                predicate: True.into(),
             },
         ];
         // init plan to A
