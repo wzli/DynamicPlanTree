@@ -1,6 +1,4 @@
-#[macro_use]
-extern crate downcast_rs;
-use downcast_rs::Downcast;
+// #[macro_use]
 use enum_dispatch::enum_dispatch;
 
 mod behaviour;
@@ -28,7 +26,7 @@ pub struct Plan {
     active: bool,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
-    pub behaviour: Box<dyn Behaviour>,
+    pub behaviour: BehaviourEnum,
     pub transitions: Vec<Transition>,
     pub plans: Vec<Plan>,
     pub data: Value,
@@ -50,7 +48,7 @@ impl Plan {
     }
 
     pub fn new<S: Into<String>>(
-        behaviour: Box<dyn Behaviour>,
+        behaviour: BehaviourEnum,
         name: S,
         active: bool,
         run_interval: Duration,
@@ -181,8 +179,7 @@ impl Plan {
             }
             // if plan doesn't exist, create and insert an default plan
             Err(pos) => {
-                let default =
-                    Plan::new(Box::new(DefaultBehaviour), name, true, Duration::new(0, 0));
+                let default = Plan::new(DefaultBehaviour.into(), name, true, Duration::new(0, 0));
                 self.plans.insert(pos, default);
                 Some(&mut self.plans[pos])
             }
@@ -231,10 +228,10 @@ impl Plan {
 
     fn call<F, T>(&mut self, f_name: &str, f: F) -> T
     where
-        F: FnOnce(&mut Box<dyn Behaviour>, &mut Plan) -> T,
+        F: FnOnce(&mut BehaviourEnum, &mut Plan) -> T,
     {
         self.debug_log(">>", f_name);
-        let mut behaviour = std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour));
+        let mut behaviour = std::mem::replace(&mut self.behaviour, DefaultBehaviour.into());
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
         self.debug_log("<<", f_name);
@@ -255,29 +252,9 @@ impl Drop for Plan {
 mod tests {
     use crate::*;
 
-    #[derive(Serialize, Deserialize, Default)]
-    struct TestBehaviour {
-        entry_count: u32,
-        exit_count: u32,
-        run_count: u32,
-    }
-
-    #[typetag::serde]
-    impl Behaviour for TestBehaviour {
-        fn on_entry(&mut self, _plan: &mut Plan) {
-            self.entry_count += 1;
-        }
-        fn on_exit(&mut self, _plan: &mut Plan) {
-            self.exit_count += 1;
-        }
-        fn on_run(&mut self, _plan: &mut Plan) {
-            self.run_count += 1;
-        }
-    }
-
     fn new_plan(name: &str, active: bool) -> Plan {
         Plan::new(
-            Box::new(TestBehaviour::default()),
+            RunCountBehaviour::default().into(),
             name,
             active,
             Duration::new(0, 0),
@@ -298,16 +275,24 @@ mod tests {
         for (i, plan) in root_plan.plans.iter().enumerate() {
             assert!(plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
-            let sm = plan.behaviour.downcast_ref::<TestBehaviour>().unwrap();
-            assert_eq!(sm.entry_count, 1);
-            assert_eq!(sm.run_count, 0);
-            assert_eq!(sm.exit_count, 0);
+            match &plan.behaviour {
+                BehaviourEnum::RunCountBehaviour(sm) => {
+                    assert_eq!(sm.entry_count, 1);
+                    assert_eq!(sm.run_count, 0);
+                    assert_eq!(sm.exit_count, 0);
+                }
+                _ => panic!(),
+            }
         }
         root_plan.exit_all();
         for plan in &root_plan.plans {
             assert!(!plan.active());
-            let sm = plan.behaviour.downcast_ref::<TestBehaviour>().unwrap();
-            assert_eq!(sm.exit_count, 1);
+            match &plan.behaviour {
+                BehaviourEnum::RunCountBehaviour(sm) => {
+                    assert_eq!(sm.exit_count, 1);
+                }
+                _ => panic!(),
+            }
         }
     }
 
@@ -354,18 +339,24 @@ mod tests {
             root_plan.run();
         }
         root_plan.exit_all();
-        for plan in &root_plan.plans {
-            let sm = plan.behaviour.downcast_ref::<TestBehaviour>().unwrap();
-            assert_eq!(sm.entry_count, cycles);
-            assert_eq!(sm.exit_count, cycles);
-            // off by one becase inital plan didn't run
-            let run_cycles = if plan.name() == "C" {
-                cycles - 1
-            } else {
-                cycles
-            };
-            assert_eq!(sm.run_count, run_cycles);
-        }
+
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
+
+        for plan in &root_plan.plans {
+            match &plan.behaviour {
+                BehaviourEnum::RunCountBehaviour(sm) => {
+                    assert_eq!(sm.entry_count, cycles);
+                    assert_eq!(sm.exit_count, cycles);
+                    // off by one becase inital plan didn't run
+                    let run_cycles = if plan.name() == "C" {
+                        cycles - 1
+                    } else {
+                        cycles
+                    };
+                    assert_eq!(sm.run_count, run_cycles);
+                }
+                _ => panic!(),
+            }
+        }
     }
 }

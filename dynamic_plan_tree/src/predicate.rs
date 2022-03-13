@@ -20,7 +20,7 @@ pub enum PredicateEnum {
 }
 
 #[enum_dispatch(PredicateEnum)]
-pub trait Predicate: Send + Downcast {
+pub trait Predicate: Send {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool;
 }
 
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn and() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(!And(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(!And(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(!And(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn or() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(!Or(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(Or(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(Or(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -192,14 +192,14 @@ mod tests {
 
     #[test]
     fn not() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(!Not(Box::new(True.into())).evaluate(&p, &[]));
         assert!(Not(Box::new(False.into())).evaluate(&p, &[]));
     }
 
     #[test]
     fn xor() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(!Xor(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(Xor(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(Xor(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn nand() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(Nand(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(Nand(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(Nand(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn nor() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(Nor(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(!Nor(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(!Nor(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -226,38 +226,29 @@ mod tests {
 
     #[test]
     fn xnor() {
-        let p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         assert!(Xnor(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(!Xnor(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(!Xnor(vec![True.into(), False.into()]).evaluate(&p, &[]));
         assert!(Xnor(vec![True.into(), True.into()]).evaluate(&p, &[]));
     }
 
-    #[derive(Serialize, Deserialize)]
-    pub struct TestBehaviour(pub Option<bool>);
-    #[typetag::serde]
-    impl Behaviour for TestBehaviour {
-        fn status(&self, _: &Plan) -> Option<bool> {
-            self.0
-        }
-    }
-
     fn make_plan(a: bool, b: bool, c: Option<bool>) -> Plan {
-        let mut p = Plan::new(Box::new(DefaultBehaviour), "", false, Duration::new(0, 0));
+        let mut p = Plan::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
         p.insert(Plan::new(
-            Box::new(TestBehaviour(Some(a))),
+            SetStatusBehaviour(Some(a)).into(),
             "a",
             false,
             Duration::new(0, 0),
         ));
         p.insert(Plan::new(
-            Box::new(TestBehaviour(Some(b))),
+            SetStatusBehaviour(Some(b)).into(),
             "b",
             false,
             Duration::new(0, 0),
         ));
         p.insert(Plan::new(
-            Box::new(TestBehaviour(c)),
+            SetStatusBehaviour(c).into(),
             "c",
             false,
             Duration::new(0, 0),

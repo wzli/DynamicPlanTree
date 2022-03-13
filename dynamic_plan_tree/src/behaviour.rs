@@ -1,27 +1,38 @@
 use crate::*;
 
-#[typetag::serde]
-pub trait Behaviour: Send + Downcast {
+#[enum_dispatch]
+#[derive(Serialize, Deserialize)]
+pub enum BehaviourEnum {
+    DefaultBehaviour,
+    MultiBehaviour,
+    EvalBehaviour,
+    SequenceBehaviour,
+    FallbackBehaviour,
+    MaxUtilBehaviour,
+
+    RunCountBehaviour,
+    SetStatusBehaviour,
+}
+
+#[enum_dispatch(BehaviourEnum)]
+pub trait Behaviour: Send {
     fn status(&self, _plan: &Plan) -> Option<bool> {
         None
     }
     fn utility(&self, _plan: &Plan) -> f64 {
         0.
     }
-    fn on_run(&mut self, _plan: &mut Plan) {}
     fn on_entry(&mut self, _plan: &mut Plan) {}
     fn on_exit(&mut self, _plan: &mut Plan) {}
+    fn on_run(&mut self, _plan: &mut Plan) {}
 }
-impl_downcast!(Behaviour);
 
 #[derive(Serialize, Deserialize)]
 pub struct DefaultBehaviour;
-#[typetag::serde]
 impl Behaviour for DefaultBehaviour {}
 
 #[derive(Serialize, Deserialize)]
-pub struct MultiBehaviour(pub Vec<Box<dyn Behaviour>>);
-#[typetag::serde]
+pub struct MultiBehaviour(pub Vec<BehaviourEnum>);
 impl Behaviour for MultiBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
         for behaviour in &mut self.0 {
@@ -45,7 +56,6 @@ impl Behaviour for MultiBehaviour {
 
 #[derive(Serialize, Deserialize)]
 pub struct EvalBehaviour(pub PredicateEnum, pub PredicateEnum);
-#[typetag::serde]
 impl Behaviour for EvalBehaviour {
     fn status(&self, plan: &Plan) -> Option<bool> {
         if self.1.evaluate(plan, &[]) {
@@ -60,7 +70,6 @@ impl Behaviour for EvalBehaviour {
 
 #[derive(Serialize, Deserialize)]
 pub struct SequenceBehaviour;
-#[typetag::serde]
 impl Behaviour for SequenceBehaviour {
     fn status(&self, plan: &Plan) -> Option<bool> {
         EvalBehaviour(AllSuccess.into(), AnyFailure.into()).status(plan)
@@ -69,7 +78,6 @@ impl Behaviour for SequenceBehaviour {
 
 #[derive(Serialize, Deserialize)]
 pub struct FallbackBehaviour;
-#[typetag::serde]
 impl Behaviour for FallbackBehaviour {
     fn status(&self, plan: &Plan) -> Option<bool> {
         EvalBehaviour(AnySuccess.into(), AllFailure.into()).status(plan)
@@ -78,7 +86,6 @@ impl Behaviour for FallbackBehaviour {
 
 #[derive(Serialize, Deserialize)]
 pub struct MaxUtilBehaviour;
-#[typetag::serde]
 impl Behaviour for MaxUtilBehaviour {
     fn on_run(&mut self, plan: &mut Plan) {
         // get highest utility plan
@@ -117,5 +124,40 @@ pub fn max_utility(plans: &Vec<Plan>) -> Option<(&Plan, f64)> {
             .enumerate()
             .fold((0, f64::NAN), |max, x| if max.1 > x.1 { max } else { x });
         Some((&plans[pos], utility))
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TestBehaviour(pub Option<bool>);
+impl Behaviour for TestBehaviour {
+    fn status(&self, _: &Plan) -> Option<bool> {
+        self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct RunCountBehaviour {
+    pub entry_count: u32,
+    pub exit_count: u32,
+    pub run_count: u32,
+}
+
+impl Behaviour for RunCountBehaviour {
+    fn on_entry(&mut self, _plan: &mut Plan) {
+        self.entry_count += 1;
+    }
+    fn on_exit(&mut self, _plan: &mut Plan) {
+        self.exit_count += 1;
+    }
+    fn on_run(&mut self, _plan: &mut Plan) {
+        self.run_count += 1;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SetStatusBehaviour(pub Option<bool>);
+impl Behaviour for SetStatusBehaviour {
+    fn status(&self, _: &Plan) -> Option<bool> {
+        self.0
     }
 }
