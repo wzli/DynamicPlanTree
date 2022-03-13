@@ -258,6 +258,32 @@ mod tests {
         )
     }
 
+    fn abc_plan() -> Plan {
+        let mut root_plan = new_plan("root", true);
+        root_plan.transitions = vec![
+            Transition {
+                src: vec!["A".into()],
+                dst: vec!["B".into()],
+                predicate: Or(vec![True.into(), False.into()]).into(),
+            },
+            Transition {
+                src: vec!["B".into()],
+                dst: vec!["C".into()],
+                predicate: True.into(),
+            },
+            Transition {
+                src: vec!["C".into()],
+                dst: vec!["A".into()],
+                predicate: True.into(),
+            },
+        ];
+        // init plan to A
+        root_plan.insert(new_plan("A", true));
+        root_plan.insert(new_plan("B", false));
+        root_plan.insert(new_plan("C", false));
+        root_plan
+    }
+
     #[test]
     fn sorted_insert() {
         let _ = env_logger::try_init();
@@ -296,28 +322,7 @@ mod tests {
     #[test]
     fn cycle_plans() {
         let _ = env_logger::try_init();
-        let mut root_plan = new_plan("root", true);
-        root_plan.transitions = vec![
-            Transition {
-                src: vec!["A".into()],
-                dst: vec!["B".into()],
-                predicate: Or(vec![True.into(), False.into()]).into(),
-            },
-            Transition {
-                src: vec!["B".into()],
-                dst: vec!["C".into()],
-                predicate: True.into(),
-            },
-            Transition {
-                src: vec!["C".into()],
-                dst: vec!["A".into()],
-                predicate: True.into(),
-            },
-        ];
-        // init plan to A
-        root_plan.insert(new_plan("A", true));
-        root_plan.insert(new_plan("B", false));
-        root_plan.insert(new_plan("C", false));
+        let mut root_plan = abc_plan();
         root_plan.run();
         root_plan.run();
         let cycles = 10;
@@ -337,8 +342,6 @@ mod tests {
         }
         root_plan.exit_all();
 
-        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
-
         for plan in &root_plan.plans {
             match &*plan.behaviour {
                 BehaviourEnum::RunCountBehaviour(sm) => {
@@ -355,5 +358,23 @@ mod tests {
                 _ => panic!(),
             }
         }
+    }
+
+    #[test]
+    fn generate_schema() {
+        let _ = env_logger::try_init();
+
+        let mut root_plan = abc_plan();
+
+        // serialize and print root plan
+        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
+
+        // generate and print plan schema
+        use serde_reflection::{Tracer, TracerConfig};
+        let mut tracer = Tracer::new(TracerConfig::default());
+        tracer.trace_simple_type::<BehaviourEnum>().unwrap();
+        tracer.trace_simple_type::<PredicateEnum>().unwrap();
+        let registry = tracer.registry().unwrap();
+        debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
     }
 }
