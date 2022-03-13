@@ -11,8 +11,8 @@ pub enum PredicateEnum {
     False,
     And,
     Or,
-    Not,
     Xor,
+    Not,
     Nand,
     Nor,
     Xnor,
@@ -61,22 +61,18 @@ impl Predicate for Or {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Not(pub Box<PredicateEnum>);
-impl Predicate for Not {
+pub struct Xor(pub Vec<PredicateEnum>);
+impl Predicate for Xor {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        !self.0.evaluate(plan, src)
+        0 != 1 & self.0.iter().filter(|x| x.evaluate(plan, src)).count()
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Xor(pub Vec<PredicateEnum>);
-impl Predicate for Xor {
+pub struct Not(pub Box<PredicateEnum>);
+impl Predicate for Not {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        0 != 1 & self
-            .0
-            .iter()
-            .filter(|pred| pred.evaluate(plan, src))
-            .count()
+        !self.0.evaluate(plan, src)
     }
 }
 
@@ -100,11 +96,7 @@ impl Predicate for Nor {
 pub struct Xnor(pub Vec<PredicateEnum>);
 impl Predicate for Xnor {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        0 == 1 & self
-            .0
-            .iter()
-            .filter(|pred| pred.evaluate(plan, src))
-            .count()
+        0 == 1 & self.0.iter().filter(|x| x.evaluate(plan, src)).count()
     }
 }
 
@@ -112,15 +104,7 @@ impl Predicate for Xnor {
 pub struct AllSuccess;
 impl Predicate for AllSuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        if src.is_empty() {
-            plan.plans
-                .iter()
-                .all(|p| p.behaviour.status(&p).unwrap_or(false))
-        } else {
-            src.iter()
-                .filter_map(|p| plan.get(p))
-                .all(|p| p.behaviour.status(&p).unwrap_or(false))
-        }
+        all_success(plan, src, false)
     }
 }
 
@@ -128,15 +112,7 @@ impl Predicate for AllSuccess {
 pub struct AnySuccess;
 impl Predicate for AnySuccess {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        if src.is_empty() {
-            plan.plans
-                .iter()
-                .any(|p| p.behaviour.status(&p).unwrap_or(false))
-        } else {
-            src.iter()
-                .filter_map(|p| plan.get(p))
-                .any(|p| p.behaviour.status(&p).unwrap_or(false))
-        }
+        any_success(plan, src, false)
     }
 }
 
@@ -144,15 +120,7 @@ impl Predicate for AnySuccess {
 pub struct AllFailure;
 impl Predicate for AllFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        !if src.is_empty() {
-            plan.plans
-                .iter()
-                .any(|p| p.behaviour.status(&p).unwrap_or(true))
-        } else {
-            src.iter()
-                .filter_map(|p| plan.get(p))
-                .any(|p| p.behaviour.status(&p).unwrap_or(true))
-        }
+        !any_success(plan, src, true)
     }
 }
 
@@ -160,15 +128,31 @@ impl Predicate for AllFailure {
 pub struct AnyFailure;
 impl Predicate for AnyFailure {
     fn evaluate(&self, plan: &Plan, src: &[String]) -> bool {
-        !if src.is_empty() {
-            plan.plans
-                .iter()
-                .all(|p| p.behaviour.status(&p).unwrap_or(true))
-        } else {
-            src.iter()
-                .filter_map(|p| plan.get(p))
-                .all(|p| p.behaviour.status(&p).unwrap_or(true))
-        }
+        !all_success(plan, src, true)
+    }
+}
+
+fn all_success(plan: &Plan, src: &[String], none_val: bool) -> bool {
+    if src.is_empty() {
+        plan.plans
+            .iter()
+            .all(|p| p.behaviour.status(&p).unwrap_or(none_val))
+    } else {
+        src.iter()
+            .filter_map(|p| plan.get(p))
+            .all(|p| p.behaviour.status(&p).unwrap_or(none_val))
+    }
+}
+
+fn any_success(plan: &Plan, src: &[String], none_val: bool) -> bool {
+    if src.is_empty() {
+        plan.plans
+            .iter()
+            .any(|p| p.behaviour.status(&p).unwrap_or(none_val))
+    } else {
+        src.iter()
+            .filter_map(|p| plan.get(p))
+            .any(|p| p.behaviour.status(&p).unwrap_or(none_val))
     }
 }
 

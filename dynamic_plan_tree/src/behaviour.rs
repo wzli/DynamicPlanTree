@@ -38,6 +38,20 @@ impl Behaviour for DefaultBehaviour {}
 #[derive(Serialize, Deserialize)]
 pub struct MultiBehaviour(pub Vec<BehaviourEnum>);
 impl Behaviour for MultiBehaviour {
+    fn status(&self, plan: &Plan) -> Option<bool> {
+        let mut status = Some(true);
+        for behaviour in &self.0 {
+            match behaviour.status(&plan) {
+                Some(true) => {}
+                Some(false) => return Some(false),
+                None => status = None,
+            }
+        }
+        status
+    }
+    fn utility(&self, plan: &Plan) -> f64 {
+        self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
+    }
     fn on_run(&mut self, plan: &mut Plan) {
         for behaviour in &mut self.0 {
             behaviour.on_run(plan);
@@ -50,11 +64,8 @@ impl Behaviour for MultiBehaviour {
     }
     fn on_exit(&mut self, plan: &mut Plan) {
         for behaviour in self.0.iter_mut().rev() {
-            behaviour.on_entry(plan);
+            behaviour.on_exit(plan);
         }
-    }
-    fn utility(&self, plan: &Plan) -> f64 {
-        self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
     }
 }
 

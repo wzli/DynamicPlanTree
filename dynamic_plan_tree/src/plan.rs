@@ -364,7 +364,7 @@ mod tests {
     fn generate_schema() {
         let _ = env_logger::try_init();
 
-        let mut root_plan = abc_plan();
+        let root_plan = abc_plan();
 
         // serialize and print root plan
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
