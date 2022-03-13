@@ -26,7 +26,7 @@ pub struct Plan {
     active: bool,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
-    pub behaviour: BehaviourEnum,
+    pub behaviour: Box<BehaviourEnum>,
     pub transitions: Vec<Transition>,
     pub plans: Vec<Plan>,
     pub data: Value,
@@ -47,8 +47,8 @@ impl Plan {
         self.timestamp
     }
 
-    pub fn new<S: Into<String>>(
-        behaviour: BehaviourEnum,
+    pub fn new<S: Into<String>, B: Into<BehaviourEnum>>(
+        behaviour: B,
         name: S,
         active: bool,
         run_interval: Duration,
@@ -57,7 +57,7 @@ impl Plan {
             name: name.into(),
             active,
             run_interval,
-            behaviour,
+            behaviour: Box::new(behaviour.into()),
             transitions: Vec::new(),
             plans: Vec::new(),
             data: Value::Null,
@@ -179,7 +179,7 @@ impl Plan {
             }
             // if plan doesn't exist, create and insert an default plan
             Err(pos) => {
-                let default = Plan::new(DefaultBehaviour.into(), name, true, Duration::new(0, 0));
+                let default = Plan::new(DefaultBehaviour, name, true, Duration::new(0, 0));
                 self.plans.insert(pos, default);
                 Some(&mut self.plans[pos])
             }
@@ -228,10 +228,11 @@ impl Plan {
 
     fn call<F, T>(&mut self, f_name: &str, f: F) -> T
     where
-        F: FnOnce(&mut BehaviourEnum, &mut Plan) -> T,
+        F: FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
     {
         self.debug_log(">>", f_name);
-        let mut behaviour = std::mem::replace(&mut self.behaviour, DefaultBehaviour.into());
+        let mut behaviour =
+            std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour.into()));
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
         self.debug_log("<<", f_name);
@@ -254,7 +255,7 @@ mod tests {
 
     fn new_plan(name: &str, active: bool) -> Plan {
         Plan::new(
-            RunCountBehaviour::default().into(),
+            RunCountBehaviour::default(),
             name,
             active,
             Duration::new(0, 0),
@@ -275,7 +276,7 @@ mod tests {
         for (i, plan) in root_plan.plans.iter().enumerate() {
             assert!(plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
-            match &plan.behaviour {
+            match &*plan.behaviour {
                 BehaviourEnum::RunCountBehaviour(sm) => {
                     assert_eq!(sm.entry_count, 1);
                     assert_eq!(sm.run_count, 0);
@@ -287,7 +288,7 @@ mod tests {
         root_plan.exit_all();
         for plan in &root_plan.plans {
             assert!(!plan.active());
-            match &plan.behaviour {
+            match &*plan.behaviour {
                 BehaviourEnum::RunCountBehaviour(sm) => {
                     assert_eq!(sm.exit_count, 1);
                 }
@@ -343,7 +344,7 @@ mod tests {
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
 
         for plan in &root_plan.plans {
-            match &plan.behaviour {
+            match &*plan.behaviour {
                 BehaviourEnum::RunCountBehaviour(sm) => {
                     assert_eq!(sm.entry_count, cycles);
                     assert_eq!(sm.exit_count, cycles);
