@@ -1,4 +1,8 @@
-use crate::*;
+use crate::plan::Plan;
+use crate::predicate::*;
+
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
 
 #[enum_dispatch]
 #[derive(Serialize, Deserialize)]
@@ -94,13 +98,13 @@ impl Behaviour for MaxUtilBehaviour {
             None => return,
         };
         // get active plan
-        if let Some(Plan { name: active, .. }) = plan.plans.iter().find(|plan| plan.active) {
+        if let Some(active_plan) = plan.plans.iter().find(|plan| plan.active()) {
             // current plan is already best
-            if *active == best {
+            if *active_plan.name() == best {
                 return;
             }
             // exit active plan
-            let active = active.clone();
+            let active = active_plan.name().clone();
             plan.exit(&active);
         }
         // enter new plan

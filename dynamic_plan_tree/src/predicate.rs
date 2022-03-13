@@ -1,4 +1,8 @@
-use crate::*;
+use crate::behaviour::Behaviour;
+use crate::plan::Plan;
+
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
 
 #[enum_dispatch]
 #[derive(Serialize, Deserialize)]
@@ -170,7 +174,9 @@ impl Predicate for AnyFailure {
 
 #[cfg(test)]
 mod tests {
+    use crate::behaviour::*;
     use crate::predicate::*;
+    use std::time::Duration;
 
     #[test]
     fn and() {
