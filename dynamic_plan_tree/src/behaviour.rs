@@ -15,6 +15,8 @@ pub enum BehaviourEnum {
     ModifyStatus,
 
     MultiBehaviour,
+    SequenceBehaviour,
+    FallbackBehaviour,
     MaxUtilBehaviour,
     RepeatBehaviour,
 
@@ -138,6 +140,53 @@ impl Behaviour for RepeatBehaviour {
         }
         // otherwise keep running behaviour
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SequenceBehaviour(Vec<String>);
+impl Behaviour for SequenceBehaviour {
+    fn status(&self, plan: &Plan) -> Option<bool> {
+        AllSuccessStatus.status(plan)
+    }
+    fn on_run(&mut self, plan: &mut Plan) {
+        check_visited_status_and_jump(&mut self.0, plan);
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FallbackBehaviour(Vec<String>);
+impl Behaviour for FallbackBehaviour {
+    fn status(&self, plan: &Plan) -> Option<bool> {
+        AnySuccessStatus.status(plan)
+    }
+    fn on_run(&mut self, plan: &mut Plan) {
+        check_visited_status_and_jump(&mut self.0, plan);
+    }
+}
+
+fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan) {
+    // find first inactive visited plans that have status none
+    let pos = visited.iter().position(|x| match plan.get(x) {
+        Some(x) => !x.active() && x.behaviour.status(plan).is_none(),
+        None => false,
+    });
+    // jump back to that plan
+    if let Some(pos) = pos {
+        plan.exit_all();
+        plan.enter(&visited[pos]);
+        visited.truncate(pos);
+    }
+    // find currently active plan
+    let active = match plan.plans.iter().find(|x| x.active()) {
+        Some(x) => x.name(),
+        None => return,
+    };
+    // add active plan to visited if not already
+    match visited.last() {
+        Some(last) if last == active => return,
+        _ => {}
+    }
+    visited.push(active.clone());
 }
 
 #[derive(Serialize, Deserialize)]
