@@ -1,11 +1,11 @@
 use crate::behaviour::{Behaviour, BehaviourEnum, DefaultBehaviour};
 use crate::predicate::{Predicate, PredicateEnum};
 
-use log::debug;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, Instant};
+use tracing::{debug, debug_span};
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn sorted_insert() {
-        let _ = env_logger::try_init();
+        let _ = tracing_subscriber::fmt::try_init();
 
         let mut root_plan = new_plan("root", true);
         root_plan.insert(new_plan("C", true));
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn cycle_plans() {
-        let _ = env_logger::try_init();
+        let _ = tracing_subscriber::fmt::try_init();
         let mut root_plan = abc_plan();
         root_plan.run();
         root_plan.run();
@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn generate_schema() {
-        let _ = env_logger::try_init();
+        let _ = tracing_subscriber::fmt::try_init();
 
         let root_plan = abc_plan();
 
