@@ -172,7 +172,7 @@ fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan) {
     });
     // jump back to that plan
     if let Some(pos) = pos {
-        plan.exit_all(None);
+        plan.exit_all();
         plan.enter(&visited[pos]);
         visited.truncate(pos);
     }
