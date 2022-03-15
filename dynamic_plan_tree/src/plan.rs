@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use tracing::{debug, debug_span};
+use tracing::{debug, debug_span, event, span::EnteredSpan, Level};
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
@@ -58,7 +58,8 @@ impl Plan {
             timestamp: Instant::now(),
         };
         if active {
-            plan.call("on_entry", |behaviour, plan| behaviour.on_entry(plan));
+            let _span = debug_span!("entry", plan=%plan.name).entered();
+            plan.call(|behaviour, plan| behaviour.on_entry(plan));
         }
         plan
     }
@@ -67,13 +68,7 @@ impl Plan {
         // sorted insert
         let found = self.find(&plan.name);
         let pos = found.unwrap_or_else(|x| x);
-        debug!(
-            "{:?}\t{}\t>> insert\t{} ->\t{:?}",
-            self as *const _,
-            self.name,
-            plan.name,
-            self.plans.iter().map(|plan| &plan.name).collect::<Vec<_>>()
-        );
+        event!(Level::DEBUG, plan = %self.name, ins=%plan.name, "insert");
         match found {
             // overwrite if there is already one
             Ok(_) => self.plans[pos] = plan,
@@ -84,13 +79,7 @@ impl Plan {
 
     pub fn remove(&mut self, name: &str) -> Option<Plan> {
         let pos = self.find(name).ok()?;
-        debug!(
-            "{:?}\t{}\t>> remove\t{} <-\t{:?}",
-            self as *const _,
-            self.name,
-            name,
-            self.plans.iter().map(|plan| &plan.name).collect::<Vec<_>>()
-        );
+        event!(Level::DEBUG, plan = %self.name, rmv=%name, "remove");
         Some(self.plans.remove(pos))
     }
 
@@ -108,19 +97,13 @@ impl Plan {
         Some(&mut self.plans[pos])
     }
 
-    pub fn run(&mut self) {
-        // call run() recursively
-        self.plans
-            .iter_mut()
-            .filter(|plan| plan.active)
-            .par_bridge()
-            .for_each(|plan| plan.run());
-
-        // limit execution frequency
-        if self.timestamp.elapsed() < self.run_interval {
-            return;
+    pub fn run(&mut self, parent_span: Option<&EnteredSpan>) {
+        // create trace span
+        let span = match parent_span {
+            Some(x) => debug_span!(parent : x, "run", plan=%self.name),
+            None => debug_span!("run", plan=%self.name),
         }
-        self.timestamp = Instant::now();
+        .entered();
 
         // get active set of plans
         use std::collections::HashSet;
@@ -130,6 +113,8 @@ impl Plan {
             .filter(|plan| plan.active)
             .map(|plan| &plan.name)
             .collect::<HashSet<_>>();
+
+        event!(Level::DEBUG, status=?self.behaviour.status(&self), active=?active_plans, "before");
 
         // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
@@ -142,6 +127,7 @@ impl Plan {
             .collect::<Vec<_>>()
             .iter()
             .for_each(|t| {
+                event!(Level::DEBUG, src=?t.src, dst=?t.dst, "transition");
                 t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
                     self.exit(p);
                 });
@@ -151,8 +137,28 @@ impl Plan {
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
+        // call run() recursively
+        self.plans
+            .iter_mut()
+            .filter(|plan| plan.active)
+            .par_bridge()
+            .for_each(|plan| plan.run(Some(&span)));
+
+        // limit execution frequency
+        if self.timestamp.elapsed() < self.run_interval {
+            return;
+        }
+        self.timestamp = Instant::now();
+
         // run the state machine of this plan
-        self.call("on_run", |behaviour, plan| behaviour.on_run(plan));
+        self.call(|behaviour, plan| behaviour.on_run(plan));
+
+        event!(Level::DEBUG, status=?self.behaviour.status(&self), active=?self
+            .plans
+            .iter()
+            .filter(|plan| plan.active)
+            .map(|plan| &plan.name)
+            .collect::<Vec<_>>(), "after ");
     }
 
     pub fn enter(&mut self, name: &str) -> Option<&mut Plan> {
@@ -167,7 +173,8 @@ impl Plan {
                 // if plan is inactive, set as active and call on_entry()
                 if !plan.active {
                     plan.active = true;
-                    plan.call("on_entry", |behaviour, plan| behaviour.on_entry(plan));
+                    let _span = debug_span!("entry", plan=%plan.name).entered();
+                    plan.call(|behaviour, plan| behaviour.on_entry(plan));
                 }
                 Some(plan)
             }
@@ -186,50 +193,38 @@ impl Plan {
         let plan = &mut self.plans[pos];
         // only exit if plan is active
         if plan.active {
-            plan.exit_all();
+            plan.exit_all(None);
         }
         Some(plan)
     }
 
-    pub fn exit_all(&mut self) {
+    pub fn exit_all(&mut self, parent_span: Option<&EnteredSpan>) {
+        // create trace span
+        let span = match parent_span {
+            Some(x) => debug_span!(parent : x, "exit", plan=%self.name),
+            None => debug_span!("exit", plan=%self.name),
+        }
+        .entered();
         // recursively exit all active child plans
         self.plans
             .iter_mut()
             .filter(|plan| plan.active)
             .par_bridge()
-            .for_each(|plan| plan.exit_all());
+            .for_each(|plan| plan.exit_all(Some(&span)));
 
         // trigger on_exit() for self
         self.active = false;
-        self.call("on_exit", |behaviour, plan| behaviour.on_exit(plan));
+        self.call(|behaviour, plan| behaviour.on_exit(plan));
     }
 
-    pub fn debug_log(&self, pre: &str, tag: &str) {
-        debug!(
-            "{:?}\t{}\t{} {}\t{:?}\t{:?}",
-            self as *const _,
-            self.name,
-            pre,
-            tag,
-            self.behaviour.status(self),
-            self.plans
-                .iter()
-                .filter(|plan| plan.active)
-                .map(|plan| &plan.name)
-                .collect::<Vec<_>>()
-        );
-    }
-
-    fn call<F, T>(&mut self, f_name: &str, f: F) -> T
+    fn call<F, T>(&mut self, f: F) -> T
     where
         F: FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
     {
-        self.debug_log(">>", f_name);
         let mut behaviour =
             std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour.into()));
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
-        self.debug_log("<<", f_name);
         ret
     }
 }
@@ -238,7 +233,7 @@ impl Drop for Plan {
     fn drop(&mut self) {
         if self.active {
             self.active = false;
-            self.call("on_exit", |behaviour, plan| behaviour.on_exit(plan));
+            self.call(|behaviour, plan| behaviour.on_exit(plan));
         }
     }
 }
@@ -307,7 +302,7 @@ mod tests {
                 _ => panic!(),
             }
         }
-        root_plan.exit_all();
+        root_plan.exit_all(None);
         for plan in &root_plan.plans {
             assert!(!plan.active());
             match &*plan.behaviour {
@@ -321,26 +316,32 @@ mod tests {
 
     #[test]
     fn cycle_plans() {
-        let _ = tracing_subscriber::fmt::try_init();
+        use tracing::Level;
+        use tracing_subscriber::fmt::format::FmtSpan;
+        let _ = tracing_subscriber::fmt()
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .with_max_level(Level::DEBUG)
+            .with_target(false)
+            .try_init();
         let mut root_plan = abc_plan();
-        root_plan.run();
-        root_plan.run();
+        root_plan.run(None);
+        root_plan.run(None);
         let cycles = 10;
         for _ in 0..(cycles - 1) {
             assert!(!root_plan.get("A").unwrap().active());
             assert!(!root_plan.get("B").unwrap().active());
             assert!(root_plan.get("C").unwrap().active());
-            root_plan.run();
+            root_plan.run(None);
             assert!(root_plan.get("A").unwrap().active());
             assert!(!root_plan.get("B").unwrap().active());
             assert!(!root_plan.get("C").unwrap().active());
-            root_plan.run();
+            root_plan.run(None);
             assert!(!root_plan.get("A").unwrap().active());
             assert!(root_plan.get("B").unwrap().active());
             assert!(!root_plan.get("C").unwrap().active());
-            root_plan.run();
+            root_plan.run(None);
         }
-        root_plan.exit_all();
+        root_plan.exit_all(None);
 
         for plan in &root_plan.plans {
             match &*plan.behaviour {
@@ -348,7 +349,7 @@ mod tests {
                     assert_eq!(sm.entry_count, cycles);
                     assert_eq!(sm.exit_count, cycles);
                     // off by one becase inital plan didn't run
-                    let run_cycles = if plan.name() == "C" {
+                    let run_cycles = if plan.name() == "A" {
                         cycles - 1
                     } else {
                         cycles

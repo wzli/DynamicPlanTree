@@ -172,7 +172,7 @@ fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan) {
     });
     // jump back to that plan
     if let Some(pos) = pos {
-        plan.exit_all();
+        plan.exit_all(None);
         plan.enter(&visited[pos]);
         visited.truncate(pos);
     }
@@ -269,7 +269,7 @@ impl Behaviour for MultiBehaviour {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct RunCountBehaviour {
     pub entry_count: u32,
     pub exit_count: u32,
