@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use tracing::{debug, debug_span, event, Level, Span};
+use tracing::{debug, debug_span, Span};
 
 #[derive(Serialize, Deserialize)]
 pub struct Transition {
@@ -71,11 +71,10 @@ impl Plan {
         // sorted insert
         let found = self.find(&plan.name);
         let pos = found.unwrap_or_else(|x| x);
-        let _span = self.span.enter();
-        event!(Level::DEBUG, plan=%plan.name, "insert");
+        debug!(parent: &self.span, plan=%plan.name, "insert");
         if plan.active {
             if self.active {
-                plan.span = debug_span!("plan", name=%plan.name);
+                plan.span = debug_span!(parent: &self.span, "plan", name=%plan.name);
             } else {
                 plan.exit_all();
             }
@@ -90,8 +89,7 @@ impl Plan {
 
     pub fn remove(&mut self, name: &str) -> Option<Plan> {
         let pos = self.find(name).ok()?;
-        let _span = self.span.enter();
-        event!(Level::DEBUG, plan=%name, "remove");
+        debug!(parent: &self.span, plan=%name, "remove");
         Some(self.plans.remove(pos))
     }
 
@@ -118,10 +116,7 @@ impl Plan {
             .filter(|plan| plan.active)
             .map(|plan| &plan.name)
             .collect::<HashSet<_>>();
-
-        self.span.in_scope(
-            || event!(Level::DEBUG, status=?self.behaviour.status(&self), active=?active_plans),
-        );
+        debug!(parent: &self.span, plans=?active_plans, "active");
 
         // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
@@ -134,8 +129,7 @@ impl Plan {
             .collect::<Vec<_>>()
             .iter()
             .for_each(|t| {
-                self.span
-                    .in_scope(|| event!(Level::DEBUG, src=?t.src, dst=?t.dst, "transition"));
+                debug!(parent: &self.span, src=?t.src, dst=?t.dst, "transition");
                 t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
                     self.exit(p);
                 });
@@ -174,14 +168,15 @@ impl Plan {
                 // if plan is inactive, set as active and call on_entry()
                 if !plan.active {
                     plan.active = true;
-                    plan.span = debug_span!(parent:&self.span, "plan", name=%plan.name);
+                    plan.span = debug_span!(parent:&self.span, "plan", %name);
                     plan.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
                 }
                 Some(plan)
             }
             // if plan doesn't exist, create and insert an default plan
             Err(pos) => {
-                let default = Plan::new(DefaultBehaviour, name, true, Duration::new(0, 0));
+                let mut default = Plan::new(DefaultBehaviour, name, true, Duration::new(0, 0));
+                default.span = debug_span!(parent:&self.span, "plan", %name);
                 self.plans.insert(pos, default);
                 Some(&mut self.plans[pos])
             }
@@ -218,13 +213,11 @@ impl Plan {
         f: impl FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
         name: &str,
     ) -> T {
-        let span = std::mem::replace(&mut self.span, Span::none()).entered();
-        event!(Level::DEBUG, func = name, "call");
+        let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
         let mut behaviour =
             std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour.into()));
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
-        let _ = std::mem::replace(&mut self.span, span.exit());
         ret
     }
 }
@@ -316,9 +309,9 @@ mod tests {
     #[test]
     fn cycle_plans() {
         use tracing::Level;
-        // use tracing_subscriber::fmt::format::FmtSpan;
+        use tracing_subscriber::fmt::format::FmtSpan;
         let _ = tracing_subscriber::fmt()
-            // .with_span_events(FmtSpan::CLOSE)
+            .with_span_events(FmtSpan::ENTER)
             .with_max_level(Level::DEBUG)
             .with_target(false)
             .try_init();
