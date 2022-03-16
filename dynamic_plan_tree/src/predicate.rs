@@ -133,26 +133,20 @@ impl Predicate for AnyFailure {
 }
 
 fn all_success(plan: &Plan, src: &[String], none_val: bool) -> bool {
+    let f = |p: &Plan| p.behaviour.status(&p).unwrap_or(none_val);
     if src.is_empty() {
-        plan.plans
-            .iter()
-            .all(|p| p.behaviour.status(&p).unwrap_or(none_val))
+        plan.plans.iter().all(f)
     } else {
-        src.iter()
-            .filter_map(|p| plan.get(p))
-            .all(|p| p.behaviour.status(&p).unwrap_or(none_val))
+        src.iter().filter_map(|p| plan.get(p)).all(f)
     }
 }
 
 fn any_success(plan: &Plan, src: &[String], none_val: bool) -> bool {
+    let f = |p: &Plan| p.behaviour.status(&p).unwrap_or(none_val);
     if src.is_empty() {
-        plan.plans
-            .iter()
-            .any(|p| p.behaviour.status(&p).unwrap_or(none_val))
+        plan.plans.iter().any(f)
     } else {
-        src.iter()
-            .filter_map(|p| plan.get(p))
-            .any(|p| p.behaviour.status(&p).unwrap_or(none_val))
+        src.iter().filter_map(|p| plan.get(p)).any(f)
     }
 }
 

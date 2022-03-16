@@ -43,9 +43,9 @@ impl Plan {
         self.timestamp
     }
 
-    pub fn new<S: Into<String>, B: Into<BehaviourEnum>>(
-        behaviour: B,
-        name: S,
+    pub fn new(
+        behaviour: impl Into<BehaviourEnum>,
+        name: impl Into<String>,
         active: bool,
         run_interval: Duration,
     ) -> Self {
@@ -213,10 +213,11 @@ impl Plan {
         self.span = Span::none();
     }
 
-    fn call<F, T>(&mut self, f: F, name: &str) -> T
-    where
-        F: FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
-    {
+    fn call<T>(
+        &mut self,
+        f: impl FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
+        name: &str,
+    ) -> T {
         let span = std::mem::replace(&mut self.span, Span::none()).entered();
         event!(Level::DEBUG, func = name, "call");
         let mut behaviour =
