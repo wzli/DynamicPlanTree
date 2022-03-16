@@ -67,12 +67,19 @@ impl Plan {
         plan
     }
 
-    pub fn insert(&mut self, plan: Plan) -> &mut Plan {
+    pub fn insert(&mut self, mut plan: Plan) -> &mut Plan {
         // sorted insert
         let found = self.find(&plan.name);
         let pos = found.unwrap_or_else(|x| x);
-        self.span
-            .in_scope(|| event!(Level::DEBUG, plan=%plan.name, "insert"));
+        let _span = self.span.enter();
+        event!(Level::DEBUG, plan=%plan.name, "insert");
+        if plan.active {
+            if self.active {
+                plan.span = debug_span!("plan", name=%plan.name);
+            } else {
+                plan.exit_all();
+            }
+        }
         match found {
             // overwrite if there is already one
             Ok(_) => self.plans[pos] = plan,
@@ -83,8 +90,8 @@ impl Plan {
 
     pub fn remove(&mut self, name: &str) -> Option<Plan> {
         let pos = self.find(name).ok()?;
-        self.span
-            .in_scope(|| event!(Level::DEBUG, plan=%name, "remove"));
+        let _span = self.span.enter();
+        event!(Level::DEBUG, plan=%name, "remove");
         Some(self.plans.remove(pos))
     }
 
@@ -112,9 +119,11 @@ impl Plan {
             .map(|plan| &plan.name)
             .collect::<HashSet<_>>();
 
-        let span = std::mem::replace(&mut self.span, Span::none()).entered();
+        self.span.in_scope(
+            || event!(Level::DEBUG, status=?self.behaviour.status(&self), active=?active_plans),
+        );
+
         // evaluate state transitions
-        event!(Level::DEBUG, status=?self.behaviour.status(&self), active=?active_plans);
         let transitions = std::mem::take(&mut self.transitions);
         transitions
             .iter()
@@ -125,7 +134,8 @@ impl Plan {
             .collect::<Vec<_>>()
             .iter()
             .for_each(|t| {
-                event!(Level::DEBUG, src=?t.src, dst=?t.dst, "transition");
+                self.span
+                    .in_scope(|| event!(Level::DEBUG, src=?t.src, dst=?t.dst, "transition"));
                 t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
                     self.exit(p);
                 });
@@ -134,7 +144,6 @@ impl Plan {
                 });
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
-        let _ = std::mem::replace(&mut self.span, span.exit());
 
         // call run() recursively
         self.plans
@@ -209,13 +218,11 @@ impl Plan {
         F: FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
     {
         let span = std::mem::replace(&mut self.span, Span::none()).entered();
-        //let call_span = debug_span!("call", func = name).entered();
         event!(Level::DEBUG, func = name, "call");
         let mut behaviour =
             std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour.into()));
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
-        // call_span.exit();
         let _ = std::mem::replace(&mut self.span, span.exit());
         ret
     }
@@ -308,9 +315,9 @@ mod tests {
     #[test]
     fn cycle_plans() {
         use tracing::Level;
-        use tracing_subscriber::fmt::format::FmtSpan;
+        // use tracing_subscriber::fmt::format::FmtSpan;
         let _ = tracing_subscriber::fmt()
-            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            // .with_span_events(FmtSpan::CLOSE)
             .with_max_level(Level::DEBUG)
             .with_target(false)
             .try_init();
