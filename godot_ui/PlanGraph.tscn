@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=2]
+
+[ext_resource path="res://PlanGraph.gd" type="Script" id=1]
+[ext_resource path="res://GraphPopup.gd" type="Script" id=2]
+
+[node name="PlanGraph" type="GraphEdit"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+minimap_enabled = false
+script = ExtResource( 1 )
+
+[node name="GraphPopup" type="PopupMenu" parent="."]
+margin_right = 20.0
+margin_bottom = 20.0
+custom_constants/vseparation = 10
+items = [ "New Plan", null, 0, false, false, 0, 0, null, "", false, "New Transition", null, 0, false, false, 1, 0, null, "", false ]
+script = ExtResource( 2 )
+
+[connection signal="connection_request" from="." to="." method="_connection_request"]
+[connection signal="popup_request" from="." to="GraphPopup" method="_on_Control_popup_request"]
+[connection signal="id_pressed" from="GraphPopup" to="." method="_on_GraphPopup_id_pressed"]
