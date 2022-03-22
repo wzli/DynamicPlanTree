@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=2]
 
-[ext_resource path="res://BehaviourOption.gd" type="Script" id=1]
-[ext_resource path="res://PlanNode.gd" type="Script" id=2]
+[ext_resource path="res://app/plan_node/behaviour_option.gd" type="Script" id=1]
+[ext_resource path="res://app/plan_node/plan_node.gd" type="Script" id=2]
 
 [node name="PlanNode" type="GraphNode"]
 margin_right = 152.0
@@ -33,6 +33,8 @@ margin_right = 150.0
 margin_bottom = 24.0
 text = "Name"
 align = 1
+caret_blink = true
+caret_blink_speed = 0.5
 
 [node name="BehaviourOption" type="OptionButton" parent="MarginContainer/VBoxContainer"]
 margin_top = 34.0

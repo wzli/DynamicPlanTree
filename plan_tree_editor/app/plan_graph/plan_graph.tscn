@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=2]
 
-[ext_resource path="res://PlanGraph.gd" type="Script" id=1]
-[ext_resource path="res://GraphPopup.gd" type="Script" id=2]
+[ext_resource path="res://app/plan_graph/plan_graph.gd" type="Script" id=1]
+[ext_resource path="res://app/plan_graph/graph_popup.gd" type="Script" id=2]
 
 [node name="PlanGraph" type="GraphEdit"]
 anchor_right = 1.0

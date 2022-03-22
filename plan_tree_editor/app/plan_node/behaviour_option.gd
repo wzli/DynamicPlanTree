@@ -1,12 +1,15 @@
 extends OptionButton
 
-var schema_version;
+var schema_version := 0
+
 
 func _ready():
 	reload_schema()
 
+
 func _pressed():
 	reload_schema()
+
 
 func set_behaviour(name):
 	if not Global.schema:
@@ -16,6 +19,7 @@ func set_behaviour(name):
 		for found_name in behaviours[idx]:
 			if name == found_name:
 				select(int(idx))
+
 
 func reload_schema():
 	if schema_version != Global.schema_version:
