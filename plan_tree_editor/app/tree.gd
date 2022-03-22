@@ -7,6 +7,8 @@ onready var tabs := $"../../TabContainer"
 
 func _ready():
 	create_tree(create_item(), Global.plan_tree)
+	$"../PlanNode".set_slot_enabled_left(0, false)
+	$"../PlanNode".set_slot_enabled_right(0, false)
 
 
 func create_tree(root, plan):
