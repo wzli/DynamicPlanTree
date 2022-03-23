@@ -18,6 +18,7 @@ pub struct Transition {
 pub struct Plan {
     name: String,
     active: bool,
+    pub autostart: bool,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
     pub behaviour: Box<BehaviourEnum>,
@@ -46,12 +47,13 @@ impl Plan {
     pub fn new(
         behaviour: impl Into<BehaviourEnum>,
         name: impl Into<String>,
-        active: bool,
+        autostart: bool,
         run_interval: Duration,
     ) -> Self {
-        let mut plan = Plan {
+        Self {
             name: name.into(),
-            active,
+            active: false,
+            autostart,
             run_interval,
             behaviour: Box::new(behaviour.into()),
             transitions: Vec::new(),
@@ -59,12 +61,7 @@ impl Plan {
             data: Value::Null,
             timestamp: Instant::now(),
             span: Span::none(),
-        };
-        if active {
-            plan.span = debug_span!("plan", name=%plan.name);
-            plan.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
         }
-        plan
     }
 
     pub fn insert(&mut self, mut plan: Plan) -> &mut Plan {
@@ -108,6 +105,9 @@ impl Plan {
     }
 
     pub fn run(&mut self) {
+        // enter plan if not already
+        self.enter_autostart(None);
+
         // get active set of plans
         use std::collections::HashSet;
         let active_plans = self
@@ -162,50 +162,72 @@ impl Plan {
             return None;
         }
         // look for requested plan
-        match self.find(name) {
-            Ok(pos) => {
-                let plan = &mut self.plans[pos];
-                // if plan is inactive, set as active and call on_entry()
-                if !plan.active {
-                    plan.active = true;
-                    plan.span = debug_span!(parent:&self.span, "plan", %name);
-                    plan.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
-                }
-                Some(plan)
-            }
-            // if plan doesn't exist, create and insert an default plan
+        let pos = match self.find(name) {
+            Ok(pos) => pos,
+            // if plan doesn't exist, create and insert a default plan
             Err(pos) => {
-                let mut default = Plan::new(DefaultBehaviour, name, true, Duration::new(0, 0));
-                default.span = debug_span!(parent:&self.span, "plan", %name);
-                self.plans.insert(pos, default);
-                Some(&mut self.plans[pos])
+                self.plans.insert(
+                    pos,
+                    Plan::new(DefaultBehaviour, name, false, Duration::new(0, 0)),
+                );
+                pos
             }
-        }
+        };
+        let plan = &mut self.plans[pos];
+        plan.enter_autostart(Some(&self.span));
+        Some(plan)
     }
 
     pub fn exit(&mut self, name: &str) -> Option<&mut Plan> {
         // ignore if plan is not found
         let pos = self.find(name).ok()?;
         let plan = &mut self.plans[pos];
-        // only exit if plan is active
-        if plan.active {
-            plan.exit_all();
-        }
+        plan.exit_all();
         Some(plan)
     }
 
-    pub fn exit_all(&mut self) {
+    pub fn enter_autostart(&mut self, parent_span: Option<&Span>) -> bool {
+        // only enter if plan is inactive
+        if self.active {
+            return false;
+        }
+        // create new span
+        match parent_span {
+            Some(x) => self.span = debug_span!(parent: x, "plan", name=%self.name),
+            None => self.span = debug_span!("plan", name=%self.name),
+        }
+        // recursively enter all autostart child plans
+        self.plans
+            .iter_mut()
+            .filter(|plan| plan.autostart && !plan.active)
+            .par_bridge()
+            .for_each(|plan| {
+                plan.enter_autostart(Some(&self.span));
+            });
+        // trigger on_entry() for self
+        self.active = true;
+        self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
+        true
+    }
+
+    pub fn exit_all(&mut self) -> bool {
+        // only exit if plan is active
+        if !self.active {
+            return false;
+        }
         // recursively exit all active child plans
         self.plans
             .iter_mut()
             .filter(|plan| plan.active)
             .par_bridge()
-            .for_each(|plan| plan.exit_all());
-
+            .for_each(|plan| {
+                plan.exit_all();
+            });
         // trigger on_exit() for self
         self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
         self.active = false;
         self.span = Span::none();
+        true
     }
 
     fn call<T>(
@@ -236,11 +258,11 @@ mod tests {
     use crate::plan::*;
     use crate::predicate::*;
 
-    fn new_plan(name: &str, active: bool) -> Plan {
+    fn new_plan(name: &str, autostart: bool) -> Plan {
         Plan::new(
             RunCountBehaviour::default(),
             name,
-            active,
+            autostart,
             Duration::new(0, 0),
         )
     }
@@ -283,11 +305,11 @@ mod tests {
 
         assert_eq!(root_plan.plans.len(), 3);
         for (i, plan) in root_plan.plans.iter().enumerate() {
-            assert!(plan.active());
+            assert!(!plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
             match &*plan.behaviour {
                 BehaviourEnum::RunCountBehaviour(sm) => {
-                    assert_eq!(sm.entry_count, 1);
+                    assert_eq!(sm.entry_count, 0);
                     assert_eq!(sm.run_count, 0);
                     assert_eq!(sm.exit_count, 0);
                 }
@@ -299,7 +321,7 @@ mod tests {
             assert!(!plan.active());
             match &*plan.behaviour {
                 BehaviourEnum::RunCountBehaviour(sm) => {
-                    assert_eq!(sm.exit_count, 1);
+                    assert_eq!(sm.exit_count, 0);
                 }
                 _ => panic!(),
             }
