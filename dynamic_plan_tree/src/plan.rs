@@ -73,7 +73,7 @@ impl Plan {
             if self.active {
                 plan.span = debug_span!(parent: &self.span, "plan", name=%plan.name);
             } else {
-                plan.exit_all();
+                plan.exit(false);
             }
         }
         match found {
@@ -106,7 +106,7 @@ impl Plan {
 
     pub fn run(&mut self) {
         // enter plan if not already
-        self.enter_autostart(None);
+        self.enter(None);
 
         // get active set of plans
         use std::collections::HashSet;
@@ -131,10 +131,10 @@ impl Plan {
             .for_each(|t| {
                 debug!(parent: &self.span, src=?t.src, dst=?t.dst, "transition");
                 t.src.iter().filter(|p| !t.dst.contains(p)).for_each(|p| {
-                    self.exit(p);
+                    self.exit_plan(p);
                 });
                 t.dst.iter().filter(|p| !t.src.contains(p)).for_each(|p| {
-                    self.enter(p);
+                    self.enter_plan(p);
                 });
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
@@ -156,7 +156,7 @@ impl Plan {
         self.call(|behaviour, plan| behaviour.on_run(plan), "run");
     }
 
-    pub fn enter(&mut self, name: &str) -> Option<&mut Plan> {
+    pub fn enter_plan(&mut self, name: &str) -> Option<&mut Plan> {
         // can only enter plans within an active plan
         if !self.active {
             return None;
@@ -174,19 +174,19 @@ impl Plan {
             }
         };
         let plan = &mut self.plans[pos];
-        plan.enter_autostart(Some(&self.span));
+        plan.enter(Some(&self.span));
         Some(plan)
     }
 
-    pub fn exit(&mut self, name: &str) -> Option<&mut Plan> {
+    pub fn exit_plan(&mut self, name: &str) -> Option<&mut Plan> {
         // ignore if plan is not found
         let pos = self.find(name).ok()?;
         let plan = &mut self.plans[pos];
-        plan.exit_all();
+        plan.exit(false);
         Some(plan)
     }
 
-    pub fn enter_autostart(&mut self, parent_span: Option<&Span>) -> bool {
+    pub fn enter(&mut self, parent_span: Option<&Span>) -> bool {
         // only enter if plan is inactive
         if self.active {
             return false;
@@ -202,7 +202,7 @@ impl Plan {
             .filter(|plan| plan.autostart && !plan.active)
             .par_bridge()
             .for_each(|plan| {
-                plan.enter_autostart(Some(&self.span));
+                plan.enter(Some(&self.span));
             });
         // trigger on_entry() for self
         self.active = true;
@@ -210,7 +210,7 @@ impl Plan {
         true
     }
 
-    pub fn exit_all(&mut self) -> bool {
+    pub fn exit(&mut self, exclude_self: bool) -> bool {
         // only exit if plan is active
         if !self.active {
             return false;
@@ -221,12 +221,14 @@ impl Plan {
             .filter(|plan| plan.active)
             .par_bridge()
             .for_each(|plan| {
-                plan.exit_all();
+                plan.exit(false);
             });
-        // trigger on_exit() for self
-        self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
-        self.active = false;
-        self.span = Span::none();
+        if !exclude_self {
+            // trigger on_exit() for self
+            self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
+            self.active = false;
+            self.span = Span::none();
+        }
         true
     }
 
@@ -316,7 +318,7 @@ mod tests {
                 _ => panic!(),
             }
         }
-        root_plan.exit_all();
+        root_plan.exit(false);
         for plan in &root_plan.plans {
             assert!(!plan.active());
             match &*plan.behaviour {
@@ -355,7 +357,7 @@ mod tests {
             assert!(!root_plan.get("C").unwrap().active());
             root_plan.run();
         }
-        root_plan.exit_all();
+        root_plan.exit(false);
 
         for plan in &root_plan.plans {
             match &*plan.behaviour {

@@ -172,8 +172,8 @@ fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan) {
     });
     // jump back to that plan
     if let Some(pos) = pos {
-        plan.exit_all();
-        plan.enter(&visited[pos]);
+        plan.exit(true);
+        plan.enter_plan(&visited[pos]);
         visited.truncate(pos);
     }
     // find currently active plan
@@ -215,10 +215,10 @@ impl Behaviour for MaxUtilBehaviour {
             }
             // exit active plan
             let active = active_plan.name().clone();
-            plan.exit(&active);
+            plan.exit_plan(&active);
         }
         // enter new plan
-        plan.enter(&best);
+        plan.enter_plan(&best);
     }
 }
 
