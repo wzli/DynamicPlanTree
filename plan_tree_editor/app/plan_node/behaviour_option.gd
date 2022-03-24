@@ -17,8 +17,8 @@ func update_schema():
 	var prev_selected = get_item_text(selected)
 	var behaviours = Global.schema["BehaviourEnum"]["ENUM"]
 	clear()
-	for idx in behaviours:
-		for name in behaviours[idx]:
+	for behaviour in behaviours.values():
+		for name in behaviour:
 			add_item(name)
 			if name == prev_selected:
 				select(get_item_count() - 1)

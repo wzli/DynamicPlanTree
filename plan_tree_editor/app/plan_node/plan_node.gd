@@ -9,8 +9,8 @@ onready var interval = box.get_node("IntervalSpinBox")
 onready var active = box.get_node("ActiveButton")
 
 
-func new_plan(new_plan):
-	plan = new_plan
+func update_plan(update):
+	plan = update
 	name_edit.text = plan["name"]
 	for behaviour_name in plan["behaviour"]:
 		behaviour.set_behaviour(behaviour_name)

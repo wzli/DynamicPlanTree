@@ -5,8 +5,8 @@ const PlanNode = preload("../plan_node/plan_node.tscn")
 var plan
 
 
-func new_plan(new_plan):
-	plan = new_plan
+func update_plan(update):
+	plan = update
 	name = plan["name"]
 
 
