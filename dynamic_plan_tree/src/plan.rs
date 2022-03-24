@@ -260,6 +260,15 @@ mod tests {
     use crate::plan::*;
     use crate::predicate::*;
 
+    fn tracing_init() {
+        use tracing_subscriber::fmt::format::FmtSpan;
+        let _ = tracing_subscriber::fmt()
+            .with_span_events(FmtSpan::ENTER)
+            .with_target(false)
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    }
+
     fn new_plan(name: &str, autostart: bool) -> Plan {
         Plan::new(
             RunCountBehaviour::default(),
@@ -297,7 +306,7 @@ mod tests {
 
     #[test]
     fn sorted_insert() {
-        let _ = tracing_subscriber::fmt::try_init();
+        tracing_init();
 
         let mut root_plan = new_plan("root", true);
         root_plan.insert(new_plan("C", true));
@@ -332,13 +341,7 @@ mod tests {
 
     #[test]
     fn cycle_plans() {
-        use tracing::Level;
-        use tracing_subscriber::fmt::format::FmtSpan;
-        let _ = tracing_subscriber::fmt()
-            .with_span_events(FmtSpan::ENTER)
-            .with_max_level(Level::DEBUG)
-            .with_target(false)
-            .try_init();
+        tracing_init();
         let mut root_plan = abc_plan();
         root_plan.run();
         root_plan.run();
@@ -379,13 +382,7 @@ mod tests {
 
     #[test]
     fn generate_schema() {
-        let _ = tracing_subscriber::fmt::try_init();
-
-        let root_plan = abc_plan();
-
-        // serialize and print root plan
-        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
-
+        tracing_init();
         // generate and print plan schema
         use serde_reflection::{Tracer, TracerConfig};
         let mut tracer = Tracer::new(TracerConfig::default());
@@ -393,5 +390,18 @@ mod tests {
         tracer.trace_simple_type::<PredicateEnum>().unwrap();
         let registry = tracer.registry().unwrap();
         debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
+    }
+
+    #[test]
+    fn generate_plan() {
+        tracing_init();
+        let root_plan = Plan::new(
+            RunCountBehaviour::default(),
+            "root",
+            true,
+            Duration::new(0, 0),
+        );
+        // serialize and print root plan
+        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }
 }
