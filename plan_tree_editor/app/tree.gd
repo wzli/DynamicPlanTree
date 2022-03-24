@@ -33,9 +33,9 @@ func _item_activated():
 	emit_signal("open_plan", plan)
 
 
-func _on_LoadPlan_success(plan):
+func update_plan_tree():
 	clear()
 	if tabs.get_child_count():
 		for tab in tabs.get_children():
 			tabs.remove_child(tab)
-	create_tree(create_item(), plan)
+	create_tree(create_item(), Global.plan_tree)

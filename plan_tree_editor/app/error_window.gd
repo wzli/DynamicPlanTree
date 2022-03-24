@@ -1,6 +1,6 @@
 extends AcceptDialog
 
 
-func _on_error(msg):
+func error_msg(msg):
 	dialog_text = msg
 	popup_centered()

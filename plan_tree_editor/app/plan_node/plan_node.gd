@@ -12,7 +12,6 @@ onready var active = box.get_node("ActiveButton")
 func new_plan(new_plan):
 	plan = new_plan
 	name_edit.text = plan["name"]
-	behaviour.reload_schema()
 	for behaviour_name in plan["behaviour"]:
 		behaviour.set_behaviour(behaviour_name)
 	interval.value = plan["run_interval"]

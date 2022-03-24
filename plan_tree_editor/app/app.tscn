@@ -28,7 +28,7 @@ margin_bottom = 586.0
 margin_right = 182.0
 margin_bottom = 182.0
 
-[node name="Tree" type="Tree" parent="HSplitContainer/LeftPane"]
+[node name="Tree" type="Tree" parent="HSplitContainer/LeftPane" groups=["update_plan_tree"]]
 margin_top = 186.0
 margin_right = 182.0
 margin_bottom = 586.0
@@ -80,9 +80,8 @@ margin_top = 8.0
 margin_right = 408.0
 margin_bottom = 208.0
 rect_min_size = Vector2( 400, 200 )
-text = "Paste Plan ..."
 
-[node name="ErrorWindow" type="AcceptDialog" parent="."]
+[node name="ErrorWindow" type="AcceptDialog" parent="." groups=["error_msg"]]
 margin_left = 473.0
 margin_top = 271.0
 margin_right = 551.0
@@ -124,10 +123,7 @@ script = ExtResource( 5 )
 [connection signal="item_activated" from="HSplitContainer/LeftPane/Tree" to="HSplitContainer/LeftPane/Tree" method="_item_activated"]
 [connection signal="open_plan" from="HSplitContainer/LeftPane/Tree" to="HSplitContainer/TabContainer" method="_on_Tree_open_plan"]
 [connection signal="confirmed" from="LoadSchema" to="LoadSchema" method="_confirmed"]
-[connection signal="error" from="LoadSchema" to="ErrorWindow" method="_on_error"]
 [connection signal="confirmed" from="LoadPlan" to="LoadPlan" method="_confirmed"]
-[connection signal="error" from="LoadPlan" to="ErrorWindow" method="_on_error"]
-[connection signal="success" from="LoadPlan" to="HSplitContainer/LeftPane/Tree" method="_on_LoadPlan_success"]
 [connection signal="pressed" from="HBoxContainer/CloseTabButton" to="HSplitContainer/TabContainer" method="_on_CloseTabButton_pressed"]
 [connection signal="id_pressed" from="HBoxContainer/MenuButton" to="LoadSchema" method="_on_MenuButton_id_pressed"]
 [connection signal="id_pressed" from="HBoxContainer/MenuButton" to="LoadPlan" method="_on_MenuButton_id_pressed"]

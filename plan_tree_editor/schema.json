@@ -1,0 +1,325 @@
+{
+  "AllFailure": "UNITSTRUCT",
+  "AllSuccess": "UNITSTRUCT",
+  "AllSuccessStatus": "UNITSTRUCT",
+  "And": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "PredicateEnum"
+      }
+    }
+  },
+  "AnyFailure": "UNITSTRUCT",
+  "AnySuccess": "UNITSTRUCT",
+  "AnySuccessStatus": "UNITSTRUCT",
+  "BehaviourEnum": {
+    "ENUM": {
+      "0": {
+        "DefaultBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "DefaultBehaviour"
+          }
+        }
+      },
+      "1": {
+        "EvaluateStatus": {
+          "NEWTYPE": {
+            "TYPENAME": "EvaluateStatus"
+          }
+        }
+      },
+      "2": {
+        "AllSuccessStatus": {
+          "NEWTYPE": {
+            "TYPENAME": "AllSuccessStatus"
+          }
+        }
+      },
+      "3": {
+        "AnySuccessStatus": {
+          "NEWTYPE": {
+            "TYPENAME": "AnySuccessStatus"
+          }
+        }
+      },
+      "4": {
+        "ModifyStatus": {
+          "NEWTYPE": {
+            "TYPENAME": "ModifyStatus"
+          }
+        }
+      },
+      "5": {
+        "MultiBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "MultiBehaviour"
+          }
+        }
+      },
+      "6": {
+        "SequenceBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "SequenceBehaviour"
+          }
+        }
+      },
+      "7": {
+        "FallbackBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "FallbackBehaviour"
+          }
+        }
+      },
+      "8": {
+        "MaxUtilBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "MaxUtilBehaviour"
+          }
+        }
+      },
+      "9": {
+        "RepeatBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "RepeatBehaviour"
+          }
+        }
+      },
+      "10": {
+        "RunCountBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "RunCountBehaviour"
+          }
+        }
+      },
+      "11": {
+        "SetStatusBehaviour": {
+          "NEWTYPE": {
+            "TYPENAME": "SetStatusBehaviour"
+          }
+        }
+      }
+    }
+  },
+  "DefaultBehaviour": "UNITSTRUCT",
+  "EvaluateStatus": {
+    "TUPLESTRUCT": [
+      {
+        "TYPENAME": "PredicateEnum"
+      },
+      {
+        "TYPENAME": "PredicateEnum"
+      }
+    ]
+  },
+  "FallbackBehaviour": {
+    "NEWTYPESTRUCT": {
+      "SEQ": "STR"
+    }
+  },
+  "False": "UNITSTRUCT",
+  "MaxUtilBehaviour": "UNITSTRUCT",
+  "ModifyStatus": {
+    "TUPLESTRUCT": [
+      {
+        "TYPENAME": "BehaviourEnum"
+      },
+      {
+        "OPTION": "BOOL"
+      }
+    ]
+  },
+  "MultiBehaviour": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "BehaviourEnum"
+      }
+    }
+  },
+  "Nand": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "PredicateEnum"
+      }
+    }
+  },
+  "Nor": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "PredicateEnum"
+      }
+    }
+  },
+  "Not": {
+    "NEWTYPESTRUCT": {
+      "TYPENAME": "PredicateEnum"
+    }
+  },
+  "Or": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "PredicateEnum"
+      }
+    }
+  },
+  "PredicateEnum": {
+    "ENUM": {
+      "0": {
+        "True": {
+          "NEWTYPE": {
+            "TYPENAME": "True"
+          }
+        }
+      },
+      "1": {
+        "False": {
+          "NEWTYPE": {
+            "TYPENAME": "False"
+          }
+        }
+      },
+      "2": {
+        "And": {
+          "NEWTYPE": {
+            "TYPENAME": "And"
+          }
+        }
+      },
+      "3": {
+        "Or": {
+          "NEWTYPE": {
+            "TYPENAME": "Or"
+          }
+        }
+      },
+      "4": {
+        "Xor": {
+          "NEWTYPE": {
+            "TYPENAME": "Xor"
+          }
+        }
+      },
+      "5": {
+        "Not": {
+          "NEWTYPE": {
+            "TYPENAME": "Not"
+          }
+        }
+      },
+      "6": {
+        "Nand": {
+          "NEWTYPE": {
+            "TYPENAME": "Nand"
+          }
+        }
+      },
+      "7": {
+        "Nor": {
+          "NEWTYPE": {
+            "TYPENAME": "Nor"
+          }
+        }
+      },
+      "8": {
+        "Xnor": {
+          "NEWTYPE": {
+            "TYPENAME": "Xnor"
+          }
+        }
+      },
+      "9": {
+        "AllSuccess": {
+          "NEWTYPE": {
+            "TYPENAME": "AllSuccess"
+          }
+        }
+      },
+      "10": {
+        "AnySuccess": {
+          "NEWTYPE": {
+            "TYPENAME": "AnySuccess"
+          }
+        }
+      },
+      "11": {
+        "AllFailure": {
+          "NEWTYPE": {
+            "TYPENAME": "AllFailure"
+          }
+        }
+      },
+      "12": {
+        "AnyFailure": {
+          "NEWTYPE": {
+            "TYPENAME": "AnyFailure"
+          }
+        }
+      }
+    }
+  },
+  "RepeatBehaviour": {
+    "STRUCT": [
+      {
+        "behaviour": {
+          "TYPENAME": "BehaviourEnum"
+        }
+      },
+      {
+        "condition": {
+          "TYPENAME": "PredicateEnum"
+        }
+      },
+      {
+        "retry": "BOOL"
+      },
+      {
+        "iterations": "U64"
+      },
+      {
+        "count_down": "U64"
+      },
+      {
+        "status": {
+          "OPTION": "BOOL"
+        }
+      }
+    ]
+  },
+  "RunCountBehaviour": {
+    "STRUCT": [
+      {
+        "entry_count": "U32"
+      },
+      {
+        "exit_count": "U32"
+      },
+      {
+        "run_count": "U32"
+      }
+    ]
+  },
+  "SequenceBehaviour": {
+    "NEWTYPESTRUCT": {
+      "SEQ": "STR"
+    }
+  },
+  "SetStatusBehaviour": {
+    "NEWTYPESTRUCT": {
+      "OPTION": "BOOL"
+    }
+  },
+  "True": "UNITSTRUCT",
+  "Xnor": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "PredicateEnum"
+      }
+    }
+  },
+  "Xor": {
+    "NEWTYPESTRUCT": {
+      "SEQ": {
+        "TYPENAME": "PredicateEnum"
+      }
+    }
+  }
+}

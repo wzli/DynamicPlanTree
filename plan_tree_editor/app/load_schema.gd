@@ -1,8 +1,10 @@
 extends ConfirmationDialog
 
-signal error(msg)
-
 onready var text: String = $TextEdit.text
+
+
+func _ready():
+	$TextEdit.text = JSON.print(Global.schema, "  ")
 
 
 func _on_MenuButton_id_pressed(id):
@@ -11,16 +13,14 @@ func _on_MenuButton_id_pressed(id):
 
 
 func _confirmed():
-	var schema = JSON.parse(text).result
-
-	if not schema:
-		emit_signal("error", "Could not parse JSON.")
+	var parsed = JSON.parse($TextEdit.text)
+	var schema = parsed.result
+	if parsed.error:
+		Global.error_msg(parsed.error_string + " at line " + String(parsed.error_line))
 	elif not schema.has("BehaviourEnum"):
-		emit_signal("error", "Missing behaviours schema.")
+		Global.error_msg("Missing behaviours schema.")
 	elif not schema.has("PredicateEnum"):
-		emit_signal("error", "Missing predicates schema.")
+		Global.error_msg("Missing predicates schema.")
 	else:
-		Global.schema = schema
-		Global.schema_version = hash(schema)
-		print("new schema " + String(Global.schema_version))
+		Global.update_schema(schema)
 		hide()

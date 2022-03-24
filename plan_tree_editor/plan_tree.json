@@ -1,0 +1,12 @@
+{
+  "name": "Default",
+  "active": false,
+  "autostart": true,
+  "run_interval": 0,
+  "behaviour": {
+    "DefaultBehaviour": null
+  },
+  "transitions": [],
+  "plans": [],
+  "data": null
+}

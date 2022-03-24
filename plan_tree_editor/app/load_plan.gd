@@ -1,9 +1,8 @@
 extends ConfirmationDialog
 
-signal success(plan)
-signal error(msg)
 
-onready var text: String = $TextEdit.text
+func _ready():
+	$TextEdit.text = JSON.print(Global.plan_tree, "  ")
 
 
 func _on_MenuButton_id_pressed(id):
@@ -12,28 +11,26 @@ func _on_MenuButton_id_pressed(id):
 
 
 func _confirmed():
-	var plan = JSON.parse(text).result
-
-	if not plan:
-		emit_signal("error", "Could not parse JSON.")
-	elif verify(plan):
-		Global.plan_tree = plan
-		emit_signal("success", plan)
+	var parsed = JSON.parse($TextEdit.text)
+	if parsed.error:
+		Global.error_msg(parsed.error_string + " at line " + String(parsed.error_line))
+	elif verify(parsed.result):
+		Global.update_plan_tree(parsed.result)
 		hide()
 
 
 func verify(plan):
 	if not plan.has("name"):
-		emit_signal("error", "Plan has no name.")
+		Global.error_msg("Plan has no name.")
 		return false
 	if not plan.has("behaviour"):
-		emit_signal("error", plan["name"] + " plan has no behaviour.")
+		Global.error_msg(plan["name"] + " plan has no behaviour.")
 		return false
 	if not plan.has("transitions"):
-		emit_signal("error", plan["name"] + " plan has no transitions vector.")
+		Global.error_msg(plan["name"] + " plan has no transitions vector.")
 		return false
 	if not plan.has("plans"):
-		emit_signal("error", plan["name"] + " plan has no plans vector.")
+		Global.error_msg(plan["name"] + " plan has no plans vector.")
 		return false
 	for child in plan["plans"]:
 		if not verify(child):
