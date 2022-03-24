@@ -396,7 +396,7 @@ mod tests {
     fn generate_plan() {
         tracing_init();
         let root_plan = Plan::new(
-            RunCountBehaviour::default(),
+            DefaultBehaviour,
             "root",
             true,
             Duration::new(0, 0),
