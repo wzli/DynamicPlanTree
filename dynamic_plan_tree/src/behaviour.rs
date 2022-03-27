@@ -1,52 +1,53 @@
-use crate::plan::Plan;
+use crate::plan::{Config, Plan};
 use crate::predicate::*;
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
-#[enum_dispatch]
+/*
+#[enum_dispatch(Behaviour)]
 #[derive(Serialize, Deserialize)]
 pub enum BehaviourEnum {
     DefaultBehaviour,
 
-    EvaluateStatus,
+    EvaluateStatus(EvaluateStatus<PredicateEnum, PredicateEnum>),
     AllSuccessStatus,
     AnySuccessStatus,
-    ModifyStatus,
+    ModifyStatus(ModifyStatus<Self>),
 
-    MultiBehaviour,
+    MultiBehaviour(MultiBehaviour<Self>),
+    RepeatBehaviour(RepeatBehaviour<Self>),
     SequenceBehaviour,
     FallbackBehaviour,
     MaxUtilBehaviour,
-    RepeatBehaviour,
 
-    RunCountBehaviour,
     SetStatusBehaviour,
 }
+*/
 
-#[enum_dispatch(BehaviourEnum)]
+#[enum_dispatch]
 pub trait Behaviour: Send {
-    fn status(&self, plan: &Plan) -> Option<bool>;
-    fn utility(&self, _plan: &Plan) -> f64 {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool>;
+    fn utility(&self, _plan: &Plan<impl Config>) -> f64 {
         0.
     }
-    fn on_entry(&mut self, _plan: &mut Plan) {}
-    fn on_exit(&mut self, _plan: &mut Plan) {}
-    fn on_run(&mut self, _plan: &mut Plan) {}
+    fn on_entry(&mut self, _plan: &mut Plan<impl Config>) {}
+    fn on_exit(&mut self, _plan: &mut Plan<impl Config>) {}
+    fn on_run(&mut self, _plan: &mut Plan<impl Config>) {}
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DefaultBehaviour;
 impl Behaviour for DefaultBehaviour {
-    fn status(&self, _plan: &Plan) -> Option<bool> {
+    fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
         None
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EvaluateStatus(pub PredicateEnum, pub PredicateEnum);
-impl Behaviour for EvaluateStatus {
-    fn status(&self, plan: &Plan) -> Option<bool> {
+pub struct EvaluateStatus<T, F>(pub T, pub F);
+impl<T: Predicate, F: Predicate> Behaviour for EvaluateStatus<T, F> {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         if self.1.evaluate(plan, &[]) {
             Some(false)
         } else if self.0.evaluate(plan, &[]) {
@@ -60,42 +61,42 @@ impl Behaviour for EvaluateStatus {
 #[derive(Serialize, Deserialize)]
 pub struct AllSuccessStatus;
 impl Behaviour for AllSuccessStatus {
-    fn status(&self, plan: &Plan) -> Option<bool> {
-        EvaluateStatus(AllSuccess.into(), AnyFailure.into()).status(plan)
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+        EvaluateStatus(AllSuccess, AnyFailure).status(plan)
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AnySuccessStatus;
 impl Behaviour for AnySuccessStatus {
-    fn status(&self, plan: &Plan) -> Option<bool> {
-        EvaluateStatus(AnySuccess.into(), AllFailure.into()).status(plan)
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+        EvaluateStatus(AnySuccess, AllFailure).status(plan)
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ModifyStatus(pub Box<BehaviourEnum>, pub Option<bool>);
-impl Behaviour for ModifyStatus {
-    fn status(&self, plan: &Plan) -> Option<bool> {
+pub struct ModifyStatus<B>(pub Box<B>, pub Option<bool>);
+impl<B: Behaviour> Behaviour for ModifyStatus<B> {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         self.0.status(plan).map(|x| self.1.unwrap_or(!x))
     }
-    fn utility(&self, plan: &Plan) -> f64 {
+    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
         self.0.utility(plan)
     }
-    fn on_entry(&mut self, plan: &mut Plan) {
+    fn on_entry(&mut self, plan: &mut Plan<impl Config>) {
         self.0.on_entry(plan);
     }
-    fn on_exit(&mut self, plan: &mut Plan) {
+    fn on_exit(&mut self, plan: &mut Plan<impl Config>) {
         self.0.on_exit(plan);
     }
-    fn on_run(&mut self, plan: &mut Plan) {
+    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
         self.0.on_run(plan);
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RepeatBehaviour {
-    pub behaviour: Box<BehaviourEnum>,
+pub struct RepeatBehaviour<B> {
+    pub behaviour: Box<B>,
     pub condition: PredicateEnum,
     pub retry: bool,
     pub iterations: usize,
@@ -103,22 +104,22 @@ pub struct RepeatBehaviour {
     pub status: Option<bool>,
 }
 
-impl Behaviour for RepeatBehaviour {
-    fn status(&self, _plan: &Plan) -> Option<bool> {
+impl<B: Behaviour> Behaviour for RepeatBehaviour<B> {
+    fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
         self.status
     }
-    fn utility(&self, plan: &Plan) -> f64 {
+    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
         self.behaviour.utility(plan)
     }
-    fn on_entry(&mut self, plan: &mut Plan) {
+    fn on_entry(&mut self, plan: &mut Plan<impl Config>) {
         self.status = None;
         self.count_down = self.iterations;
         self.behaviour.on_entry(plan);
     }
-    fn on_exit(&mut self, plan: &mut Plan) {
+    fn on_exit(&mut self, plan: &mut Plan<impl Config>) {
         self.behaviour.on_exit(plan);
     }
-    fn on_run(&mut self, plan: &mut Plan) {
+    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
         if self.status.is_some() {
             return;
         }
@@ -145,10 +146,10 @@ impl Behaviour for RepeatBehaviour {
 #[derive(Serialize, Deserialize)]
 pub struct SequenceBehaviour(Vec<String>);
 impl Behaviour for SequenceBehaviour {
-    fn status(&self, plan: &Plan) -> Option<bool> {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
-    fn on_run(&mut self, plan: &mut Plan) {
+    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
         check_visited_status_and_jump(&mut self.0, plan);
     }
 }
@@ -156,15 +157,15 @@ impl Behaviour for SequenceBehaviour {
 #[derive(Serialize, Deserialize)]
 pub struct FallbackBehaviour(Vec<String>);
 impl Behaviour for FallbackBehaviour {
-    fn status(&self, plan: &Plan) -> Option<bool> {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
-    fn on_run(&mut self, plan: &mut Plan) {
+    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
         check_visited_status_and_jump(&mut self.0, plan);
     }
 }
 
-fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan) {
+fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan<impl Config>) {
     // find first inactive visited plans that have status none
     let pos = visited.iter().position(|x| match plan.get(x) {
         Some(x) => !x.active() && x.behaviour.status(plan).is_none(),
@@ -192,16 +193,16 @@ fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan) {
 #[derive(Serialize, Deserialize)]
 pub struct MaxUtilBehaviour;
 impl Behaviour for MaxUtilBehaviour {
-    fn status(&self, plan: &Plan) -> Option<bool> {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
-    fn utility(&self, plan: &Plan) -> f64 {
+    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
         match max_utility(&plan.plans) {
             Some((_, util)) => util,
             None => 0.,
         }
     }
-    fn on_run(&mut self, plan: &mut Plan) {
+    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
         // get highest utility plan
         let best = match max_utility(&plan.plans) {
             Some((plan, _)) => plan.name().clone(),
@@ -222,7 +223,7 @@ impl Behaviour for MaxUtilBehaviour {
     }
 }
 
-pub fn max_utility(plans: &Vec<Plan>) -> Option<(&Plan, f64)> {
+pub fn max_utility(plans: &Vec<Plan<impl Config>>) -> Option<(&Plan<impl Config>, f64)> {
     if plans.is_empty() {
         None
     } else {
@@ -236,9 +237,9 @@ pub fn max_utility(plans: &Vec<Plan>) -> Option<(&Plan, f64)> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MultiBehaviour(pub Vec<BehaviourEnum>);
-impl Behaviour for MultiBehaviour {
-    fn status(&self, plan: &Plan) -> Option<bool> {
+pub struct MultiBehaviour<B>(pub Vec<B>);
+impl<B: Behaviour> Behaviour for MultiBehaviour<B> {
+    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         let mut status = Some(true);
         for behaviour in &self.0 {
             match behaviour.status(&plan) {
@@ -249,52 +250,30 @@ impl Behaviour for MultiBehaviour {
         }
         status
     }
-    fn utility(&self, plan: &Plan) -> f64 {
+    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
         self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
     }
-    fn on_entry(&mut self, plan: &mut Plan) {
+    fn on_entry(&mut self, plan: &mut Plan<impl Config>) {
         for behaviour in &mut self.0 {
             behaviour.on_entry(plan);
         }
     }
-    fn on_exit(&mut self, plan: &mut Plan) {
+    fn on_exit(&mut self, plan: &mut Plan<impl Config>) {
         for behaviour in self.0.iter_mut().rev() {
             behaviour.on_exit(plan);
         }
     }
-    fn on_run(&mut self, plan: &mut Plan) {
+    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
         for behaviour in &mut self.0 {
             behaviour.on_run(plan);
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct RunCountBehaviour {
-    pub entry_count: u32,
-    pub exit_count: u32,
-    pub run_count: u32,
-}
-
-impl Behaviour for RunCountBehaviour {
-    fn status(&self, _plan: &Plan) -> Option<bool> {
-        None
-    }
-    fn on_entry(&mut self, _plan: &mut Plan) {
-        self.entry_count += 1;
-    }
-    fn on_exit(&mut self, _plan: &mut Plan) {
-        self.exit_count += 1;
-    }
-    fn on_run(&mut self, _plan: &mut Plan) {
-        self.run_count += 1;
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct SetStatusBehaviour(pub Option<bool>);
 impl Behaviour for SetStatusBehaviour {
-    fn status(&self, _: &Plan) -> Option<bool> {
+    fn status(&self, _: &Plan<impl Config>) -> Option<bool> {
         self.0
     }
 }
