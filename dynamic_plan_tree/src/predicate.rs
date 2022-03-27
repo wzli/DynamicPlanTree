@@ -1,8 +1,4 @@
-use crate::behaviour::Behaviour;
-use crate::plan::{Config, Plan};
-
-use enum_dispatch::enum_dispatch;
-use serde::{Deserialize, Serialize};
+use crate::*;
 
 #[enum_dispatch]
 pub trait Predicate: Send {
@@ -133,9 +129,7 @@ fn any_success<C: Config>(plan: &Plan<C>, src: &[String], none_val: bool) -> boo
 
 #[cfg(test)]
 mod tests {
-    use crate::behaviour::*;
-    use crate::predicate::*;
-    use std::time::Duration;
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     pub struct SetStatusBehaviour(pub Option<bool>);
@@ -145,8 +139,8 @@ mod tests {
         }
     }
 
-    impl From<DefaultBehaviour> for SetStatusBehaviour {
-        fn from(_: DefaultBehaviour) -> Self {
+    impl From<behaviour::Default> for SetStatusBehaviour {
+        fn from(_: behaviour::Default) -> Self {
             Self(None)
         }
     }
@@ -167,7 +161,7 @@ mod tests {
 
     #[test]
     fn and() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(!And::<TestPredicate>(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(!And::<TestPredicate>(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(!And::<TestPredicate>(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -176,7 +170,7 @@ mod tests {
 
     #[test]
     fn or() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(!Or::<TestPredicate>(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(Or::<TestPredicate>(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(Or::<TestPredicate>(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -185,14 +179,14 @@ mod tests {
 
     #[test]
     fn not() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(!Not::<TestPredicate>(Box::new(True.into())).evaluate(&p, &[]));
         assert!(Not::<TestPredicate>(Box::new(False.into())).evaluate(&p, &[]));
     }
 
     #[test]
     fn xor() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(!Xor::<TestPredicate>(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(Xor::<TestPredicate>(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(Xor::<TestPredicate>(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -201,7 +195,7 @@ mod tests {
 
     #[test]
     fn nand() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(Nand::<TestPredicate>(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(Nand::<TestPredicate>(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(Nand::<TestPredicate>(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -210,7 +204,7 @@ mod tests {
 
     #[test]
     fn nor() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(Nor::<TestPredicate>(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(!Nor::<TestPredicate>(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(!Nor::<TestPredicate>(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -219,7 +213,7 @@ mod tests {
 
     #[test]
     fn xnor() {
-        let p = Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+        let p = Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         assert!(Xnor::<TestPredicate>(vec![False.into(), False.into()]).evaluate(&p, &[]));
         assert!(!Xnor::<TestPredicate>(vec![False.into(), True.into()]).evaluate(&p, &[]));
         assert!(!Xnor::<TestPredicate>(vec![True.into(), False.into()]).evaluate(&p, &[]));
@@ -228,7 +222,7 @@ mod tests {
 
     fn make_plan(a: bool, b: bool, c: Option<bool>) -> Plan<impl Config> {
         let mut p =
-            Plan::<TestConfig>::new(DefaultBehaviour.into(), "", false, Duration::new(0, 0));
+            Plan::<TestConfig>::new(behaviour::Default.into(), "", false, Duration::new(0, 0));
         p.insert(Plan::<TestConfig>::new(
             SetStatusBehaviour(Some(a)),
             "a",

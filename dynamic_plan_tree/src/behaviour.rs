@@ -1,8 +1,5 @@
-use crate::plan::{Config, Plan};
-use crate::predicate::*;
-
-use enum_dispatch::enum_dispatch;
-use serde::{Deserialize, Serialize};
+use crate::*;
+pub use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
 pub trait Behaviour: Send {
@@ -16,8 +13,8 @@ pub trait Behaviour: Send {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct DefaultBehaviour;
-impl Behaviour for DefaultBehaviour {
+pub struct Default;
+impl Behaviour for Default {
     fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
         None
     }
@@ -41,7 +38,7 @@ impl<T: Predicate, F: Predicate> Behaviour for EvaluateStatus<T, F> {
 pub struct AllSuccessStatus;
 impl Behaviour for AllSuccessStatus {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
-        EvaluateStatus(AllSuccess, AnyFailure).status(plan)
+        EvaluateStatus(predicate::AllSuccess, predicate::AnyFailure).status(plan)
     }
 }
 
@@ -49,7 +46,7 @@ impl Behaviour for AllSuccessStatus {
 pub struct AnySuccessStatus;
 impl Behaviour for AnySuccessStatus {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
-        EvaluateStatus(AnySuccess, AllFailure).status(plan)
+        EvaluateStatus(predicate::AnySuccess, predicate::AllFailure).status(plan)
     }
 }
 
@@ -74,7 +71,7 @@ impl<B: Behaviour> Behaviour for ModifyStatus<B> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RepeatBehaviour<B, P> {
+pub struct Repeat<B, P> {
     pub behaviour: Box<B>,
     pub condition: P,
     pub retry: bool,
@@ -83,7 +80,7 @@ pub struct RepeatBehaviour<B, P> {
     pub status: Option<bool>,
 }
 
-impl<B: Behaviour, P: Predicate> Behaviour for RepeatBehaviour<B, P> {
+impl<B: Behaviour, P: Predicate> Behaviour for Repeat<B, P> {
     fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
         self.status
     }
@@ -123,8 +120,8 @@ impl<B: Behaviour, P: Predicate> Behaviour for RepeatBehaviour<B, P> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SequenceBehaviour(Vec<String>);
-impl Behaviour for SequenceBehaviour {
+pub struct Sequence(Vec<String>);
+impl Behaviour for Sequence {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
@@ -134,8 +131,8 @@ impl Behaviour for SequenceBehaviour {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct FallbackBehaviour(Vec<String>);
-impl Behaviour for FallbackBehaviour {
+pub struct Fallback(Vec<String>);
+impl Behaviour for Fallback {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
@@ -170,8 +167,8 @@ fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan<impl
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MaxUtilBehaviour;
-impl Behaviour for MaxUtilBehaviour {
+pub struct MaxUtil;
+impl Behaviour for MaxUtil {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
@@ -216,8 +213,8 @@ pub fn max_utility(plans: &Vec<Plan<impl Config>>) -> Option<(&Plan<impl Config>
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MultiBehaviour<B>(pub Vec<B>);
-impl<B: Behaviour> Behaviour for MultiBehaviour<B> {
+pub struct Multi<B>(pub Vec<B>);
+impl<B: Behaviour> Behaviour for Multi<B> {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
         let mut status = Some(true);
         for behaviour in &self.0 {
@@ -249,17 +246,10 @@ impl<B: Behaviour> Behaviour for MultiBehaviour<B> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct SetStatusBehaviour(pub Option<bool>);
-impl Behaviour for SetStatusBehaviour {
-    fn status(&self, _: &Plan<impl Config>) -> Option<bool> {
-        self.0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::predicate::*;
     use tracing::debug;
 
     #[enum_dispatch(Predicate)]
@@ -284,18 +274,18 @@ mod tests {
     #[enum_dispatch(Behaviour)]
     #[derive(Serialize, Deserialize)]
     pub enum Beh {
-        DefaultBehaviour,
+        Default,
 
         EvaluateStatus(EvaluateStatus<Pred, Pred>),
         AllSuccessStatus,
         AnySuccessStatus,
         ModifyStatus(ModifyStatus<Self>),
 
-        MultiBehaviour(MultiBehaviour<Self>),
-        RepeatBehaviour(RepeatBehaviour<Self, Pred>),
-        SequenceBehaviour,
-        FallbackBehaviour,
-        MaxUtilBehaviour,
+        Multi(Multi<Self>),
+        Repeat(Repeat<Self, Pred>),
+        Sequence,
+        Fallback,
+        MaxUtil,
     }
 
     #[derive(Serialize, Deserialize)]
@@ -321,8 +311,7 @@ mod tests {
     fn generate_plan() {
         use std::time::Duration;
         let _ = tracing_subscriber::fmt::try_init();
-        let root_plan =
-            Plan::<TestConfig>::new(DefaultBehaviour.into(), "root", true, Duration::new(0, 0));
+        let root_plan = Plan::<TestConfig>::new(Default.into(), "root", true, Duration::new(0, 0));
         // serialize and print root plan
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }

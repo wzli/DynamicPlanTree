@@ -1,15 +1,15 @@
-use crate::behaviour::{Behaviour, DefaultBehaviour};
-use crate::predicate::Predicate;
+use crate::*;
 
 use rayon::prelude::*;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::Value;
-use std::time::{Duration, Instant};
+use serde::de::DeserializeOwned;
 use tracing::{debug, debug_span, Span};
 
+pub use serde_json::Value;
+pub use std::time::{Duration, Instant};
+
 pub trait Config {
-    type Predicate: Predicate + Serialize + DeserializeOwned;
-    type Behaviour: Behaviour + From<DefaultBehaviour> + Serialize + DeserializeOwned;
+    type Predicate: predicate::Predicate + Serialize + DeserializeOwned;
+    type Behaviour: behaviour::Behaviour + From<behaviour::Default> + Serialize + DeserializeOwned;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -173,7 +173,7 @@ impl<C: Config> Plan<C> {
             Err(pos) => {
                 self.plans.insert(
                     pos,
-                    Self::new(DefaultBehaviour.into(), name, false, Duration::new(0, 0)),
+                    Self::new(behaviour::Default.into(), name, false, Duration::new(0, 0)),
                 );
                 pos
             }
@@ -239,7 +239,7 @@ impl<C: Config> Plan<C> {
 
     fn call<T>(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self) -> T, name: &str) -> T {
         let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
-        let default = Box::new(DefaultBehaviour.into());
+        let default = Box::new(behaviour::Default.into());
         let mut behaviour = std::mem::replace(&mut self.behaviour, default);
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
@@ -257,8 +257,7 @@ impl<C: Config> Drop for Plan<C> {
 
 #[cfg(test)]
 mod tests {
-    use crate::plan::*;
-    use crate::predicate::*;
+    use super::*;
 
     fn tracing_init() {
         use tracing_subscriber::fmt::format::FmtSpan;
@@ -276,7 +275,7 @@ mod tests {
         pub run_count: u32,
     }
 
-    impl Behaviour for RunCountBehaviour {
+    impl behaviour::Behaviour for RunCountBehaviour {
         fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
             None
         }
@@ -291,8 +290,8 @@ mod tests {
         }
     }
 
-    impl From<DefaultBehaviour> for RunCountBehaviour {
-        fn from(_: DefaultBehaviour) -> RunCountBehaviour {
+    impl From<behaviour::Default> for RunCountBehaviour {
+        fn from(_: behaviour::Default) -> RunCountBehaviour {
             RunCountBehaviour::default()
         }
     }
@@ -300,7 +299,7 @@ mod tests {
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
-        type Predicate = True;
+        type Predicate = predicate::True;
         type Behaviour = RunCountBehaviour;
     }
 
@@ -319,17 +318,17 @@ mod tests {
             Transition {
                 src: vec!["A".into()],
                 dst: vec!["B".into()],
-                predicate: True,
+                predicate: predicate::True,
             },
             Transition {
                 src: vec!["B".into()],
                 dst: vec!["C".into()],
-                predicate: True,
+                predicate: predicate::True,
             },
             Transition {
                 src: vec!["C".into()],
                 dst: vec!["A".into()],
-                predicate: True,
+                predicate: predicate::True,
             },
         ];
         // init plan to A
