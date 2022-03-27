@@ -1,16 +1,45 @@
 use crate::*;
-pub use enum_dispatch::enum_dispatch;
 
-#[enum_dispatch]
-pub trait Behaviour: Send {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool>;
-    fn utility(&self, _plan: &Plan<impl Config>) -> f64 {
-        0.
-    }
-    fn on_entry(&mut self, _plan: &mut Plan<impl Config>) {}
-    fn on_exit(&mut self, _plan: &mut Plan<impl Config>) {}
-    fn on_run(&mut self, _plan: &mut Plan<impl Config>) {}
+#[macro_export]
+macro_rules! behaviour_trait {
+    () => {
+        #[enum_dispatch]
+        pub trait Behaviour: Send {
+            fn status(&self, plan: &Plan<impl Config>) -> Option<bool>;
+            fn utility(&self, _plan: &Plan<impl Config>) -> f64 {
+                0.
+            }
+            fn on_entry(&mut self, _plan: &mut Plan<impl Config>) {}
+            fn on_exit(&mut self, _plan: &mut Plan<impl Config>) {}
+            fn on_run(&mut self, _plan: &mut Plan<impl Config>) {}
+        }
+    };
 }
+
+#[macro_export]
+macro_rules! behaviour_enum {
+    ($name:ident <$pred:ident> { $($fields:tt)* } ) => {
+        #[enum_dispatch(Behaviour)]
+        #[derive(Serialize, Deserialize)]
+        pub enum $name {
+            Default($crate::behaviour::Default),
+            EvaluateStatus($crate::behaviour::EvaluateStatus<$pred, $pred>),
+            AllSuccessStatus($crate::behaviour::AllSuccessStatus),
+            AnySuccessStatus($crate::behaviour::AnySuccessStatus),
+            ModifyStatus($crate::behaviour::ModifyStatus<Self>),
+
+            Multi($crate::behaviour::Multi<Self>),
+            Repeat($crate::behaviour::Repeat<Self, $pred>),
+            Sequence($crate::behaviour::Sequence),
+            Fallback($crate::behaviour::Fallback),
+            MaxUtil($crate::behaviour::MaxUtil),
+
+            $($fields)*
+        }
+    }
+}
+
+behaviour_trait!();
 
 #[derive(Serialize, Deserialize)]
 pub struct Default;
@@ -252,41 +281,8 @@ mod tests {
     use crate::predicate::*;
     use tracing::debug;
 
-    #[enum_dispatch(Predicate)]
-    #[derive(Serialize, Deserialize)]
-    pub enum Pred {
-        True,
-        False,
-        And(And<Self>),
-        Or(Or<Self>),
-        Xor(Xor<Self>),
-        Not(Not<Self>),
-        Nand(Nand<Self>),
-        Nor(Nor<Self>),
-        Xnor(Xnor<Self>),
-
-        AllSuccess,
-        AnySuccess,
-        AllFailure,
-        AnyFailure,
-    }
-
-    #[enum_dispatch(Behaviour)]
-    #[derive(Serialize, Deserialize)]
-    pub enum Beh {
-        Default,
-
-        EvaluateStatus(EvaluateStatus<Pred, Pred>),
-        AllSuccessStatus,
-        AnySuccessStatus,
-        ModifyStatus(ModifyStatus<Self>),
-
-        Multi(Multi<Self>),
-        Repeat(Repeat<Self, Pred>),
-        Sequence,
-        Fallback,
-        MaxUtil,
-    }
+    predicate_enum!(Pred {});
+    behaviour_enum!(Beh<Pred>{});
 
     #[derive(Serialize, Deserialize)]
     struct TestConfig;

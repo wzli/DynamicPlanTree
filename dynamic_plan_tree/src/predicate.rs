@@ -1,9 +1,42 @@
 use crate::*;
 
-#[enum_dispatch]
-pub trait Predicate: Send {
-    fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
+#[macro_export]
+macro_rules! predicate_trait {
+    () => {
+        #[enum_dispatch]
+        pub trait Predicate: Send {
+            fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
+        }
+    };
 }
+
+#[macro_export]
+macro_rules! predicate_enum {
+    ($name:ident { $($fields:tt)* } ) => {
+        #[enum_dispatch(Predicate)]
+        #[derive(Serialize, Deserialize)]
+        pub enum $name {
+            True($crate::predicate::True),
+            False($crate::predicate::False),
+            And($crate::predicate::And<Self>),
+            Or($crate::predicate::Or<Self>),
+            Xor($crate::predicate::Xor<Self>),
+            Not($crate::predicate::Not<Self>),
+            Nand($crate::predicate::Nand<Self>),
+            Nor($crate::predicate::Nor<Self>),
+            Xnor($crate::predicate::Xnor<Self>),
+
+            AllSuccess($crate::predicate::AllSuccess),
+            AnySuccess($crate::predicate::AnySuccess),
+            AllFailure($crate::predicate::AllFailure),
+            AnyFailure($crate::predicate::AnyFailure),
+
+            $($fields)*
+        }
+    }
+}
+
+predicate_trait!();
 
 #[derive(Serialize, Deserialize)]
 pub struct True;
