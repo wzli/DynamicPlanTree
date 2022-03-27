@@ -4,27 +4,6 @@ use crate::predicate::*;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
-/*
-#[enum_dispatch(Behaviour)]
-#[derive(Serialize, Deserialize)]
-pub enum BehaviourEnum {
-    DefaultBehaviour,
-
-    EvaluateStatus(EvaluateStatus<PredicateEnum, PredicateEnum>),
-    AllSuccessStatus,
-    AnySuccessStatus,
-    ModifyStatus(ModifyStatus<Self>),
-
-    MultiBehaviour(MultiBehaviour<Self>),
-    RepeatBehaviour(RepeatBehaviour<Self>),
-    SequenceBehaviour,
-    FallbackBehaviour,
-    MaxUtilBehaviour,
-
-    SetStatusBehaviour,
-}
-*/
-
 #[enum_dispatch]
 pub trait Behaviour: Send {
     fn status(&self, plan: &Plan<impl Config>) -> Option<bool>;
@@ -275,5 +254,59 @@ pub struct SetStatusBehaviour(pub Option<bool>);
 impl Behaviour for SetStatusBehaviour {
     fn status(&self, _: &Plan<impl Config>) -> Option<bool> {
         self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tracing::debug;
+    //use crate::predicate::PredicateEnum;
+    //use crate::predicate::PredicateEnum;
+
+    #[enum_dispatch(Behaviour)]
+    #[derive(Serialize, Deserialize)]
+    pub enum BehaviourEnum {
+        DefaultBehaviour,
+
+        EvaluateStatus(EvaluateStatus<PredicateEnum, PredicateEnum>),
+        AllSuccessStatus,
+        AnySuccessStatus,
+        ModifyStatus(ModifyStatus<Self>),
+
+        MultiBehaviour(MultiBehaviour<Self>),
+        RepeatBehaviour(RepeatBehaviour<Self>),
+        SequenceBehaviour,
+        FallbackBehaviour,
+        MaxUtilBehaviour,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct TestConfig;
+    impl Config for TestConfig {
+        type Behaviour = BehaviourEnum;
+        type Predicate = PredicateEnum;
+    }
+
+    #[test]
+    fn generate_schema() {
+        let _ = tracing_subscriber::fmt::try_init();
+        // generate and print plan schema
+        use serde_reflection::{Tracer, TracerConfig};
+        let mut tracer = Tracer::new(TracerConfig::default());
+        tracer.trace_simple_type::<BehaviourEnum>().unwrap();
+        tracer.trace_simple_type::<PredicateEnum>().unwrap();
+        let registry = tracer.registry().unwrap();
+        debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
+    }
+
+    #[test]
+    fn generate_plan() {
+        use std::time::Duration;
+        let _ = tracing_subscriber::fmt::try_init();
+        let root_plan =
+            Plan::<TestConfig>::new(DefaultBehaviour.into(), "root", true, Duration::new(0, 0));
+        // serialize and print root plan
+        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }
 }

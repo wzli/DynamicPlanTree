@@ -1,5 +1,5 @@
 use crate::behaviour::{Behaviour, DefaultBehaviour};
-use crate::predicate::{Predicate, PredicateEnum};
+use crate::predicate::Predicate;
 
 use rayon::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -247,15 +247,13 @@ impl<C: Config> Plan<C> {
     }
 }
 
-/*
-impl<B: Behaviour + Default> Drop for Plan<B> {
+impl<C: Config> Drop for Plan<C> {
     fn drop(&mut self) {
         if self.active {
             self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
         }
     }
 }
-*/
 
 #[cfg(test)]
 mod tests {
@@ -299,10 +297,11 @@ mod tests {
         }
     }
 
+    #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
         type Behaviour = RunCountBehaviour;
-        type Predicate = PredicateEnum;
+        type Predicate = True;
     }
 
     fn new_plan(name: &str, autostart: bool) -> Plan<TestConfig> {
@@ -320,17 +319,17 @@ mod tests {
             Transition {
                 src: vec!["A".into()],
                 dst: vec!["B".into()],
-                predicate: Or(vec![True.into(), False.into()]).into(),
+                predicate: True,
             },
             Transition {
                 src: vec!["B".into()],
                 dst: vec!["C".into()],
-                predicate: True.into(),
+                predicate: True,
             },
             Transition {
                 src: vec!["C".into()],
                 dst: vec!["A".into()],
-                predicate: True.into(),
+                predicate: True,
             },
         ];
         // init plan to A
@@ -402,19 +401,4 @@ mod tests {
             assert_eq!(sm.run_count, run_cycles);
         }
     }
-
-    /*
-    #[test]
-    fn generate_plan() {
-        tracing_init();
-        let root_plan = Plan::new(
-            DefaultBehaviour,
-            "root",
-            true,
-            Duration::new(0, 0),
-        );
-        // serialize and print root plan
-        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
-    }
-    */
 }

@@ -1,4 +1,4 @@
-use crate::behaviour::{Behaviour, DefaultBehaviour};
+use crate::behaviour::Behaviour;
 use crate::plan::{Config, Plan};
 
 use enum_dispatch::enum_dispatch;
