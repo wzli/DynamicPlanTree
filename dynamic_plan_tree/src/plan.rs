@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use tracing::{debug, debug_span, Span};
 
 pub trait Config {
-    type Behaviour: Behaviour + From<DefaultBehaviour> + Serialize + DeserializeOwned;
     type Predicate: Predicate + Serialize + DeserializeOwned;
+    type Behaviour: Behaviour + From<DefaultBehaviour> + Serialize + DeserializeOwned;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -300,8 +300,8 @@ mod tests {
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
-        type Behaviour = RunCountBehaviour;
         type Predicate = True;
+        type Behaviour = RunCountBehaviour;
     }
 
     fn new_plan(name: &str, autostart: bool) -> Plan<TestConfig> {

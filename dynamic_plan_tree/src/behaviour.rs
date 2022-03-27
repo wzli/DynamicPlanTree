@@ -74,16 +74,16 @@ impl<B: Behaviour> Behaviour for ModifyStatus<B> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RepeatBehaviour<B> {
+pub struct RepeatBehaviour<B, P> {
     pub behaviour: Box<B>,
-    pub condition: PredicateEnum,
+    pub condition: P,
     pub retry: bool,
     pub iterations: usize,
     pub count_down: usize,
     pub status: Option<bool>,
 }
 
-impl<B: Behaviour> Behaviour for RepeatBehaviour<B> {
+impl<B: Behaviour, P: Predicate> Behaviour for RepeatBehaviour<B, P> {
     fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
         self.status
     }
@@ -261,21 +261,38 @@ impl Behaviour for SetStatusBehaviour {
 mod tests {
     use super::*;
     use tracing::debug;
-    //use crate::predicate::PredicateEnum;
-    //use crate::predicate::PredicateEnum;
+
+    #[enum_dispatch(Predicate)]
+    #[derive(Serialize, Deserialize)]
+    pub enum Pred {
+        True,
+        False,
+        And(And<Self>),
+        Or(Or<Self>),
+        Xor(Xor<Self>),
+        Not(Not<Self>),
+        Nand(Nand<Self>),
+        Nor(Nor<Self>),
+        Xnor(Xnor<Self>),
+
+        AllSuccess,
+        AnySuccess,
+        AllFailure,
+        AnyFailure,
+    }
 
     #[enum_dispatch(Behaviour)]
     #[derive(Serialize, Deserialize)]
-    pub enum BehaviourEnum {
+    pub enum Beh {
         DefaultBehaviour,
 
-        EvaluateStatus(EvaluateStatus<PredicateEnum, PredicateEnum>),
+        EvaluateStatus(EvaluateStatus<Pred, Pred>),
         AllSuccessStatus,
         AnySuccessStatus,
         ModifyStatus(ModifyStatus<Self>),
 
         MultiBehaviour(MultiBehaviour<Self>),
-        RepeatBehaviour(RepeatBehaviour<Self>),
+        RepeatBehaviour(RepeatBehaviour<Self, Pred>),
         SequenceBehaviour,
         FallbackBehaviour,
         MaxUtilBehaviour,
@@ -284,8 +301,8 @@ mod tests {
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
-        type Behaviour = BehaviourEnum;
-        type Predicate = PredicateEnum;
+        type Predicate = Pred;
+        type Behaviour = Beh;
     }
 
     #[test]
@@ -294,8 +311,8 @@ mod tests {
         // generate and print plan schema
         use serde_reflection::{Tracer, TracerConfig};
         let mut tracer = Tracer::new(TracerConfig::default());
-        tracer.trace_simple_type::<BehaviourEnum>().unwrap();
-        tracer.trace_simple_type::<PredicateEnum>().unwrap();
+        tracer.trace_simple_type::<Beh>().unwrap();
+        tracer.trace_simple_type::<Pred>().unwrap();
         let registry = tracer.registry().unwrap();
         debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
     }
