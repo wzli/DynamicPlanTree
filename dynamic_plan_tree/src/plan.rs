@@ -1,29 +1,34 @@
-use crate::behaviour::{Behaviour, BehaviourEnum, DefaultBehaviour};
+use crate::behaviour::{Behaviour, DefaultBehaviour};
 use crate::predicate::{Predicate, PredicateEnum};
 
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, Instant};
 use tracing::{debug, debug_span, Span};
 
-#[derive(Serialize, Deserialize)]
-pub struct Transition {
-    pub src: Vec<String>,
-    pub dst: Vec<String>,
-    pub predicate: PredicateEnum,
+pub trait Config {
+    type Behaviour: Behaviour + From<DefaultBehaviour> + Serialize + DeserializeOwned;
+    type Predicate: Predicate + Serialize + DeserializeOwned;
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Plan {
+pub struct Transition<P> {
+    pub src: Vec<String>,
+    pub dst: Vec<String>,
+    pub predicate: P,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Plan<C: Config> {
     name: String,
     active: bool,
     pub autostart: bool,
     #[serde(with = "serde_millis")]
     pub run_interval: Duration,
-    pub behaviour: Box<BehaviourEnum>,
-    pub transitions: Vec<Transition>,
-    pub plans: Vec<Plan>,
+    pub behaviour: Box<C::Behaviour>,
+    pub transitions: Vec<Transition<C::Predicate>>,
+    pub plans: Vec<Self>,
     pub data: Value,
     #[serde(skip, default = "Instant::now")]
     timestamp: Instant,
@@ -31,7 +36,7 @@ pub struct Plan {
     span: Span,
 }
 
-impl Plan {
+impl<C: Config> Plan<C> {
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -45,7 +50,7 @@ impl Plan {
     }
 
     pub fn new(
-        behaviour: impl Into<BehaviourEnum>,
+        behaviour: C::Behaviour,
         name: impl Into<String>,
         autostart: bool,
         run_interval: Duration,
@@ -55,7 +60,7 @@ impl Plan {
             active: false,
             autostart,
             run_interval,
-            behaviour: Box::new(behaviour.into()),
+            behaviour: Box::new(behaviour),
             transitions: Vec::new(),
             plans: Vec::new(),
             data: Value::Null,
@@ -64,7 +69,7 @@ impl Plan {
         }
     }
 
-    pub fn insert(&mut self, mut plan: Plan) -> &mut Plan {
+    pub fn insert(&mut self, mut plan: Self) -> &mut Self {
         // sorted insert
         let found = self.find(&plan.name);
         let pos = found.unwrap_or_else(|x| x);
@@ -84,7 +89,7 @@ impl Plan {
         &mut self.plans[pos]
     }
 
-    pub fn remove(&mut self, name: &str) -> Option<Plan> {
+    pub fn remove(&mut self, name: &str) -> Option<Self> {
         let pos = self.find(name).ok()?;
         debug!(parent: &self.span, plan=%name, "remove");
         Some(self.plans.remove(pos))
@@ -94,12 +99,12 @@ impl Plan {
         self.plans.binary_search_by(|plan| (*plan.name).cmp(name))
     }
 
-    pub fn get(&self, name: &str) -> Option<&Plan> {
+    pub fn get(&self, name: &str) -> Option<&Self> {
         let pos = self.find(name).ok()?;
         Some(&self.plans[pos])
     }
 
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut Plan> {
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Self> {
         let pos = self.find(name).ok()?;
         Some(&mut self.plans[pos])
     }
@@ -156,7 +161,7 @@ impl Plan {
         self.call(|behaviour, plan| behaviour.on_run(plan), "run");
     }
 
-    pub fn enter_plan(&mut self, name: &str) -> Option<&mut Plan> {
+    pub fn enter_plan(&mut self, name: &str) -> Option<&mut Self> {
         // can only enter plans within an active plan
         if !self.active {
             return None;
@@ -168,7 +173,7 @@ impl Plan {
             Err(pos) => {
                 self.plans.insert(
                     pos,
-                    Plan::new(DefaultBehaviour, name, false, Duration::new(0, 0)),
+                    Self::new(DefaultBehaviour.into(), name, false, Duration::new(0, 0)),
                 );
                 pos
             }
@@ -178,7 +183,7 @@ impl Plan {
         Some(plan)
     }
 
-    pub fn exit_plan(&mut self, name: &str) -> Option<&mut Plan> {
+    pub fn exit_plan(&mut self, name: &str) -> Option<&mut Self> {
         // ignore if plan is not found
         let pos = self.find(name).ok()?;
         let plan = &mut self.plans[pos];
@@ -232,31 +237,28 @@ impl Plan {
         true
     }
 
-    fn call<T>(
-        &mut self,
-        f: impl FnOnce(&mut Box<BehaviourEnum>, &mut Plan) -> T,
-        name: &str,
-    ) -> T {
+    fn call<T>(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self) -> T, name: &str) -> T {
         let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
-        let mut behaviour =
-            std::mem::replace(&mut self.behaviour, Box::new(DefaultBehaviour.into()));
+        let default = Box::new(DefaultBehaviour.into());
+        let mut behaviour = std::mem::replace(&mut self.behaviour, default);
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
         ret
     }
 }
 
-impl Drop for Plan {
+/*
+impl<B: Behaviour + Default> Drop for Plan<B> {
     fn drop(&mut self) {
         if self.active {
             self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
         }
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {
-    use crate::behaviour::RunCountBehaviour;
     use crate::plan::*;
     use crate::predicate::*;
 
@@ -269,8 +271,42 @@ mod tests {
             .try_init();
     }
 
-    fn new_plan(name: &str, autostart: bool) -> Plan {
-        Plan::new(
+    #[derive(Serialize, Deserialize, Default, Debug)]
+    pub struct RunCountBehaviour {
+        pub entry_count: u32,
+        pub exit_count: u32,
+        pub run_count: u32,
+    }
+
+    impl Behaviour for RunCountBehaviour {
+        fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
+            None
+        }
+        fn on_entry(&mut self, _plan: &mut Plan<impl Config>) {
+            self.entry_count += 1;
+        }
+        fn on_exit(&mut self, _plan: &mut Plan<impl Config>) {
+            self.exit_count += 1;
+        }
+        fn on_run(&mut self, _plan: &mut Plan<impl Config>) {
+            self.run_count += 1;
+        }
+    }
+
+    impl From<DefaultBehaviour> for RunCountBehaviour {
+        fn from(_: DefaultBehaviour) -> RunCountBehaviour {
+            RunCountBehaviour::default()
+        }
+    }
+
+    struct TestConfig;
+    impl Config for TestConfig {
+        type Behaviour = RunCountBehaviour;
+        type Predicate = PredicateEnum;
+    }
+
+    fn new_plan(name: &str, autostart: bool) -> Plan<TestConfig> {
+        Plan::<TestConfig>::new(
             RunCountBehaviour::default(),
             name,
             autostart,
@@ -278,7 +314,7 @@ mod tests {
         )
     }
 
-    fn abc_plan() -> Plan {
+    fn abc_plan() -> Plan<TestConfig> {
         let mut root_plan = new_plan("root", true);
         root_plan.transitions = vec![
             Transition {
@@ -318,24 +354,15 @@ mod tests {
         for (i, plan) in root_plan.plans.iter().enumerate() {
             assert!(!plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
-            match &*plan.behaviour {
-                BehaviourEnum::RunCountBehaviour(sm) => {
-                    assert_eq!(sm.entry_count, 0);
-                    assert_eq!(sm.run_count, 0);
-                    assert_eq!(sm.exit_count, 0);
-                }
-                _ => panic!(),
-            }
+            let sm = &plan.behaviour;
+            assert_eq!(sm.entry_count, 0);
+            assert_eq!(sm.run_count, 0);
+            assert_eq!(sm.exit_count, 0);
         }
         root_plan.exit(false);
         for plan in &root_plan.plans {
             assert!(!plan.active());
-            match &*plan.behaviour {
-                BehaviourEnum::RunCountBehaviour(sm) => {
-                    assert_eq!(sm.exit_count, 0);
-                }
-                _ => panic!(),
-            }
+            assert_eq!(plan.behaviour.exit_count, 0);
         }
     }
 
@@ -363,35 +390,20 @@ mod tests {
         root_plan.exit(false);
 
         for plan in &root_plan.plans {
-            match &*plan.behaviour {
-                BehaviourEnum::RunCountBehaviour(sm) => {
-                    assert_eq!(sm.entry_count, cycles);
-                    assert_eq!(sm.exit_count, cycles);
-                    // off by one becase inital plan didn't run
-                    let run_cycles = if plan.name() == "A" {
-                        cycles - 1
-                    } else {
-                        cycles
-                    };
-                    assert_eq!(sm.run_count, run_cycles);
-                }
-                _ => panic!(),
-            }
+            let sm = &plan.behaviour;
+            assert_eq!(sm.entry_count, cycles);
+            assert_eq!(sm.exit_count, cycles);
+            // off by one becase inital plan didn't run
+            let run_cycles = if plan.name() == "A" {
+                cycles - 1
+            } else {
+                cycles
+            };
+            assert_eq!(sm.run_count, run_cycles);
         }
     }
 
-    #[test]
-    fn generate_schema() {
-        tracing_init();
-        // generate and print plan schema
-        use serde_reflection::{Tracer, TracerConfig};
-        let mut tracer = Tracer::new(TracerConfig::default());
-        tracer.trace_simple_type::<BehaviourEnum>().unwrap();
-        tracer.trace_simple_type::<PredicateEnum>().unwrap();
-        let registry = tracer.registry().unwrap();
-        debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
-    }
-
+    /*
     #[test]
     fn generate_plan() {
         tracing_init();
@@ -404,4 +416,5 @@ mod tests {
         // serialize and print root plan
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }
+    */
 }
