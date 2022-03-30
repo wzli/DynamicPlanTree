@@ -2,7 +2,8 @@ extends ConfirmationDialog
 
 
 func _ready():
-	$TextEdit.text = JSON.print(Global.plan_tree, "  ")
+	add_button("Reset", false, "reset")
+	reset()
 
 
 func _on_MenuButton_id_pressed(id):
@@ -17,6 +18,15 @@ func _confirmed():
 	elif verify(parsed.result):
 		Global.update_plan_tree(parsed.result)
 		hide()
+
+
+func _custom_action(action: String):
+	if action == "reset":
+		reset()
+
+
+func reset():
+	$TextEdit.text = JSON.print(Global.plan_tree, "  ")
 
 
 func verify(plan):

@@ -4,7 +4,8 @@ onready var text: String = $TextEdit.text
 
 
 func _ready():
-	$TextEdit.text = JSON.print(Global.schema, "  ")
+	add_button("Reset", false, "reset")
+	reset()
 
 
 func _on_MenuButton_id_pressed(id):
@@ -24,3 +25,12 @@ func _confirmed():
 	else:
 		Global.update_schema(schema)
 		hide()
+
+
+func _custom_action(action: String):
+	if action == "reset":
+		reset()
+
+
+func reset():
+	$TextEdit.text = JSON.print(Global.schema, "  ")
