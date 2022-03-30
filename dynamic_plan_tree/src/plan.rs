@@ -11,7 +11,10 @@ pub use std::time::Duration;
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config {
     type Predicate: predicate::Predicate + Serialize + DeserializeOwned;
-    type Behaviour: behaviour::Behaviour + From<behaviour::Default> + Serialize + DeserializeOwned;
+    type Behaviour: behaviour::Behaviour
+        + From<behaviour::DefaultBehaviour>
+        + Serialize
+        + DeserializeOwned;
 }
 
 /// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
@@ -177,7 +180,12 @@ impl<C: Config> Plan<C> {
             Err(pos) => {
                 self.plans.insert(
                     pos,
-                    Self::new(behaviour::Default.into(), name, false, Duration::new(0, 0)),
+                    Self::new(
+                        behaviour::DefaultBehaviour.into(),
+                        name,
+                        false,
+                        Duration::new(0, 0),
+                    ),
                 );
                 pos
             }
@@ -243,7 +251,7 @@ impl<C: Config> Plan<C> {
 
     fn call<T>(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self) -> T, name: &str) -> T {
         let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
-        let default = Box::new(behaviour::Default.into());
+        let default = Box::new(behaviour::DefaultBehaviour.into());
         let mut behaviour = std::mem::replace(&mut self.behaviour, default);
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
@@ -294,8 +302,8 @@ mod tests {
         }
     }
 
-    impl From<behaviour::Default> for RunCountBehaviour {
-        fn from(_: behaviour::Default) -> RunCountBehaviour {
+    impl From<behaviour::DefaultBehaviour> for RunCountBehaviour {
+        fn from(_: behaviour::DefaultBehaviour) -> RunCountBehaviour {
             RunCountBehaviour::default()
         }
     }
