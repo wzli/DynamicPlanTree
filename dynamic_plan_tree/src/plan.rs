@@ -2,16 +2,19 @@ use crate::*;
 
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
+use std::time::Instant;
 use tracing::{debug, debug_span, Span};
 
 pub use serde_json::Value;
-pub use std::time::{Duration, Instant};
+pub use std::time::Duration;
 
+/// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config {
     type Predicate: predicate::Predicate + Serialize + DeserializeOwned;
     type Behaviour: behaviour::Behaviour + From<behaviour::Default> + Serialize + DeserializeOwned;
 }
 
+/// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
 #[derive(Serialize, Deserialize)]
 pub struct Transition<P> {
     pub src: Vec<String>,
@@ -19,6 +22,7 @@ pub struct Transition<P> {
     pub predicate: P,
 }
 
+/// A node in the plan tree containing some behaviour, children plans, and possible transitions.
 #[derive(Serialize, Deserialize)]
 pub struct Plan<C: Config> {
     name: String,

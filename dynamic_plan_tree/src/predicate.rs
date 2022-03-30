@@ -1,6 +1,6 @@
 use crate::*;
 
-/// Macro to redefine trait in external crates for remote enum_dispatch definition.
+/// Macro to redefine `Predicate` trait in external crates for remote enum_dispatch definition.
 #[macro_export]
 macro_rules! predicate_trait {
     () => {
