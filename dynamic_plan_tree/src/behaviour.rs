@@ -1,8 +1,10 @@
-use crate::*;
+use crate::{predicate::Predicates, *};
 
+/// Macro to redefine trait in external crates for remote enum_dispatch definition.
 #[macro_export]
 macro_rules! behaviour_trait {
     () => {
+        /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
         pub trait Behaviour: Send {
             fn status(&self, plan: &Plan<impl Config>) -> Option<bool>;
@@ -15,31 +17,24 @@ macro_rules! behaviour_trait {
         }
     };
 }
-
-#[macro_export]
-macro_rules! behaviour_enum {
-    ($name:ident <$pred:ident> { $($fields:tt)* } ) => {
-        #[enum_dispatch(Behaviour)]
-        #[derive(Serialize, Deserialize)]
-        pub enum $name {
-            Default($crate::behaviour::Default),
-            EvaluateStatus($crate::behaviour::EvaluateStatus<$pred, $pred>),
-            AllSuccessStatus($crate::behaviour::AllSuccessStatus),
-            AnySuccessStatus($crate::behaviour::AnySuccessStatus),
-            ModifyStatus($crate::behaviour::ModifyStatus<Self>),
-
-            Multi($crate::behaviour::Multi<Self>),
-            Repeat($crate::behaviour::Repeat<Self, $pred>),
-            Sequence($crate::behaviour::Sequence),
-            Fallback($crate::behaviour::Fallback),
-            MaxUtil($crate::behaviour::MaxUtil),
-
-            $($fields)*
-        }
-    }
-}
-
 behaviour_trait!();
+
+/// Default set of built-in behaviours to serve as example template.
+#[enum_dispatch(Behaviour)]
+#[derive(Serialize, Deserialize)]
+pub enum Behaviours {
+    Default,
+    EvaluateStatus(EvaluateStatus<Predicates, Predicates>),
+    AllSuccessStatus,
+    AnySuccessStatus,
+    ModifyStatus(ModifyStatus<Self>),
+
+    Multi(Multi<Self>),
+    Repeat(Repeat<Self, Predicates>),
+    Sequence,
+    Fallback,
+    MaxUtil,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Default;
@@ -281,14 +276,11 @@ mod tests {
     use crate::predicate::*;
     use tracing::debug;
 
-    predicate_enum!(Pred {});
-    behaviour_enum!(Beh<Pred>{});
-
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
-        type Predicate = Pred;
-        type Behaviour = Beh;
+        type Predicate = Predicates;
+        type Behaviour = Behaviours;
     }
 
     #[test]
@@ -297,8 +289,8 @@ mod tests {
         // generate and print plan schema
         use serde_reflection::{Tracer, TracerConfig};
         let mut tracer = Tracer::new(TracerConfig::default());
-        tracer.trace_simple_type::<Beh>().unwrap();
-        tracer.trace_simple_type::<Pred>().unwrap();
+        tracer.trace_simple_type::<Behaviours>().unwrap();
+        tracer.trace_simple_type::<Predicates>().unwrap();
         let registry = tracer.registry().unwrap();
         debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
     }

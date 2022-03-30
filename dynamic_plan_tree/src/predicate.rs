@@ -1,42 +1,37 @@
 use crate::*;
 
+/// Macro to redefine trait in external crates for remote enum_dispatch definition.
 #[macro_export]
 macro_rules! predicate_trait {
     () => {
+        /// An object that implements runtime predicate evaluation logic of an active plan.
         #[enum_dispatch]
         pub trait Predicate: Send {
             fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
         }
     };
 }
-
-#[macro_export]
-macro_rules! predicate_enum {
-    ($name:ident { $($fields:tt)* } ) => {
-        #[enum_dispatch(Predicate)]
-        #[derive(Serialize, Deserialize)]
-        pub enum $name {
-            True($crate::predicate::True),
-            False($crate::predicate::False),
-            And($crate::predicate::And<Self>),
-            Or($crate::predicate::Or<Self>),
-            Xor($crate::predicate::Xor<Self>),
-            Not($crate::predicate::Not<Self>),
-            Nand($crate::predicate::Nand<Self>),
-            Nor($crate::predicate::Nor<Self>),
-            Xnor($crate::predicate::Xnor<Self>),
-
-            AllSuccess($crate::predicate::AllSuccess),
-            AnySuccess($crate::predicate::AnySuccess),
-            AllFailure($crate::predicate::AllFailure),
-            AnyFailure($crate::predicate::AnyFailure),
-
-            $($fields)*
-        }
-    }
-}
-
 predicate_trait!();
+
+/// Default set of built-in predicates to serve as example template.
+#[enum_dispatch(Predicate)]
+#[derive(Serialize, Deserialize)]
+pub enum Predicates {
+    True,
+    False,
+    And(And<Self>),
+    Or(Or<Self>),
+    Xor(Xor<Self>),
+    Not(Not<Self>),
+    Nand(Nand<Self>),
+    Nor(Nor<Self>),
+    Xnor(Xnor<Self>),
+
+    AllSuccess,
+    AnySuccess,
+    AllFailure,
+    AnyFailure,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct True;
