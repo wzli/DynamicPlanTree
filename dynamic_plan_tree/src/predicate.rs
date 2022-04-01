@@ -13,6 +13,22 @@ macro_rules! predicate_trait {
 }
 predicate_trait!();
 
+#[macro_export]
+macro_rules! impl_predicate_from {
+    ($($pred:ty),*) => {
+    fn predicate_from(x: impl Predicate + 'static) -> Option<Self::Predicate> {
+        let mut x = Some(x);
+        let _x = &mut x as &mut dyn std::any::Any;
+        $(
+            if let Some(x) = _x.downcast_mut::<Option<$pred>>() {
+                std::mem::take(x).map(|x| x.into())
+            } else
+        )*
+        { None }
+    }
+    }
+}
+
 /// Default set of built-in predicates to serve as example template.
 #[enum_dispatch(Predicate)]
 #[derive(Serialize, Deserialize)]
@@ -185,6 +201,9 @@ mod tests {
     impl Config for TestConfig {
         type Predicate = TestPredicate;
         type Behaviour = SetStatusBehaviour;
+
+        impl_predicate_from!();
+        impl_behaviour_from!();
     }
 
     #[test]

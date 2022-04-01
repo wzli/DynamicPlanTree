@@ -11,10 +11,10 @@ pub use std::time::Duration;
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config: Sized {
     type Predicate: Predicate + Serialize + DeserializeOwned;
-    type Behaviour: Behaviour<Self>
-        + From<behaviour::DefaultBehaviour>
-        + Serialize
-        + DeserializeOwned;
+    type Behaviour: Behaviour<Self> + Serialize + DeserializeOwned;
+
+    fn behaviour_from(behaviour: impl Behaviour<Self> + 'static) -> Option<Self::Behaviour>;
+    fn predicate_from(predicate: impl Predicate + 'static) -> Option<Self::Predicate>;
 }
 
 /// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
@@ -181,7 +181,7 @@ impl<C: Config> Plan<C> {
                 self.plans.insert(
                     pos,
                     Self::new(
-                        behaviour::DefaultBehaviour.into(),
+                        C::behaviour_from(behaviour::DefaultBehaviour).unwrap(),
                         name,
                         false,
                         Duration::new(0, 0),
@@ -251,7 +251,7 @@ impl<C: Config> Plan<C> {
 
     fn call<T>(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self) -> T, name: &str) -> T {
         let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
-        let default = Box::new(behaviour::DefaultBehaviour.into());
+        let default = Box::new(C::behaviour_from(behaviour::DefaultBehaviour).unwrap());
         let mut behaviour = std::mem::replace(&mut self.behaviour, default);
         let ret = f(&mut behaviour, self);
         let _ = std::mem::replace(&mut self.behaviour, behaviour);
@@ -313,6 +313,9 @@ mod tests {
     impl Config for TestConfig {
         type Predicate = predicate::True;
         type Behaviour = RunCountBehaviour;
+
+        impl_predicate_from!();
+        impl_behaviour_from!();
     }
 
     fn new_plan(name: &str, autostart: bool) -> Plan<TestConfig> {

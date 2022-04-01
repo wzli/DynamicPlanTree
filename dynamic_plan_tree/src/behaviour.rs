@@ -19,6 +19,25 @@ macro_rules! behaviour_trait {
 }
 behaviour_trait!();
 
+#[macro_export]
+macro_rules! impl_behaviour_from {
+    ($($beh:ty),*) => {
+    fn behaviour_from(x: impl Behaviour<Self> + 'static) -> Option<Self::Behaviour> {
+        let mut x = Some(x);
+        let x = &mut x as &mut dyn std::any::Any;
+        if let Some(x) = x.downcast_mut::<Option<$crate::behaviour::DefaultBehaviour>>() {
+            std::mem::take(x).map(|x| x.into())
+        } else
+        $(
+            if let Some(x) = x.downcast_mut::<Option<$beh>>() {
+                std::mem::take(x).map(|x| x.into())
+            } else
+        )*
+        { None }
+    }
+    }
+}
+
 /// Default set of built-in behaviours to serve as example template.
 #[enum_dispatch(Behaviour<C>)]
 #[derive(Serialize, Deserialize)]
@@ -291,6 +310,9 @@ mod tests {
     impl Config for TestConfig {
         type Predicate = Predicates;
         type Behaviour = Behaviours<Self>;
+
+        impl_predicate_from!();
+        impl_behaviour_from!();
     }
 
     #[test]
