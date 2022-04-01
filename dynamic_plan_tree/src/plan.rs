@@ -2,11 +2,9 @@ use crate::*;
 
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
-use std::time::Instant;
 use tracing::{debug, debug_span, Span};
 
 pub use serde_json::Value;
-pub use std::time::Duration;
 
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config: Sized {
@@ -30,15 +28,13 @@ pub struct Transition<P> {
 pub struct Plan<C: Config> {
     name: String,
     active: bool,
+    run_countdown: u32,
+    pub run_interval: u32,
     pub autostart: bool,
-    #[serde(with = "serde_millis")]
-    pub run_interval: Duration,
     pub behaviour: Box<C::Behaviour>,
     pub transitions: Vec<Transition<C::Predicate>>,
     pub plans: Vec<Self>,
     pub data: Value,
-    #[serde(skip, default = "Instant::now")]
-    timestamp: Instant,
     #[serde(skip, default = "Span::none")]
     span: Span,
 }
@@ -52,26 +48,26 @@ impl<C: Config> Plan<C> {
         self.active
     }
 
-    pub fn timestamp(&self) -> Instant {
-        self.timestamp
+    pub fn run_countdown(&self) -> u32 {
+        self.run_countdown
     }
 
     pub fn new(
         behaviour: C::Behaviour,
         name: impl Into<String>,
+        run_interval: u32,
         autostart: bool,
-        run_interval: Duration,
     ) -> Self {
         Self {
             name: name.into(),
             active: false,
-            autostart,
+            run_countdown: 0,
             run_interval,
+            autostart,
             behaviour: Box::new(behaviour),
             transitions: Vec::new(),
             plans: Vec::new(),
             data: Value::Null,
-            timestamp: Instant::now(),
             span: Span::none(),
         }
     }
@@ -159,13 +155,12 @@ impl<C: Config> Plan<C> {
             .for_each(|plan| plan.run());
 
         // limit execution frequency
-        if self.timestamp.elapsed() < self.run_interval {
-            return;
+        if self.run_countdown == 0 {
+            // run the state machine of this plan
+            self.call(|behaviour, plan| behaviour.on_run(plan), "run");
+            self.run_countdown = self.run_interval;
         }
-        self.timestamp = Instant::now();
-
-        // run the state machine of this plan
-        self.call(|behaviour, plan| behaviour.on_run(plan), "run");
+        self.run_countdown -= 1;
     }
 
     pub fn enter_plan(&mut self, name: &str) -> Option<&mut Self> {
@@ -183,8 +178,8 @@ impl<C: Config> Plan<C> {
                     Self::new(
                         C::behaviour_from(behaviour::DefaultBehaviour).unwrap(),
                         name,
+                        0,
                         false,
-                        Duration::new(0, 0),
                     ),
                 );
                 pos
@@ -319,12 +314,7 @@ mod tests {
     }
 
     fn new_plan(name: &str, autostart: bool) -> Plan<TestConfig> {
-        Plan::<TestConfig>::new(
-            RunCountBehaviour::default(),
-            name,
-            autostart,
-            Duration::new(0, 0),
-        )
+        Plan::<TestConfig>::new(RunCountBehaviour::default(), name, 1, autostart)
     }
 
     fn abc_plan() -> Plan<TestConfig> {

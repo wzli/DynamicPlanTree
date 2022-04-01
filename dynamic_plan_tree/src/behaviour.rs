@@ -331,10 +331,8 @@ mod tests {
 
     #[test]
     fn generate_plan() {
-        use std::time::Duration;
         let _ = tracing_subscriber::fmt::try_init();
-        let root_plan =
-            Plan::<TestConfig>::new(DefaultBehaviour.into(), "root", true, Duration::new(0, 0));
+        let root_plan = Plan::<TestConfig>::new(DefaultBehaviour.into(), "root", 1, true);
         // serialize and print root plan
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }
