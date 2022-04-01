@@ -244,7 +244,7 @@ impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
 }
 
 /// Find and return the plan with higest utility.
-pub fn max_utility<C: Config>(plans: &Vec<Plan<C>>) -> Option<(&Plan<C>, f64)> {
+pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
     if plans.is_empty() {
         None
     } else {
@@ -263,7 +263,7 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         let mut status = Some(true);
         for behaviour in &self.0 {
-            match behaviour.status(&plan) {
+            match behaviour.status(plan) {
                 Some(true) => {}
                 Some(false) => return Some(false),
                 None => status = None,

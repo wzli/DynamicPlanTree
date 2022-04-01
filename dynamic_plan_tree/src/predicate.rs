@@ -163,7 +163,7 @@ impl Predicate for AnyFailure {
 }
 
 fn all_success<C: Config>(plan: &Plan<C>, src: &[String], none_val: bool) -> bool {
-    let f = |p: &Plan<C>| p.behaviour.status(&p).unwrap_or(none_val);
+    let f = |p: &Plan<C>| p.behaviour.status(p).unwrap_or(none_val);
     if src.is_empty() {
         plan.plans.iter().all(f)
     } else {
@@ -172,7 +172,7 @@ fn all_success<C: Config>(plan: &Plan<C>, src: &[String], none_val: bool) -> boo
 }
 
 fn any_success<C: Config>(plan: &Plan<C>, src: &[String], none_val: bool) -> bool {
-    let f = |p: &Plan<C>| p.behaviour.status(&p).unwrap_or(none_val);
+    let f = |p: &Plan<C>| p.behaviour.status(p).unwrap_or(none_val);
     if src.is_empty() {
         plan.plans.iter().any(f)
     } else {
