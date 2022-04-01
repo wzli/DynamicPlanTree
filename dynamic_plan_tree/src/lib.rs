@@ -3,13 +3,14 @@ pub use enum_dispatch::enum_dispatch;
 pub use plan::*;
 pub use predicate::Predicate;
 pub use serde::{Deserialize, Serialize};
+use std::any::{Any, TypeId};
 
 pub mod behaviour;
 pub mod plan;
 pub mod predicate;
 
 pub trait FromAny: Sized {
-    fn from_any(x: impl std::any::Any) -> Option<Self>;
+    fn from_any(x: impl Any) -> Option<Self>;
 }
 
 #[macro_export]

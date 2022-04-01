@@ -6,8 +6,12 @@ macro_rules! predicate_trait {
     () => {
         /// An object that implements runtime predicate evaluation logic of an active plan.
         #[enum_dispatch]
-        pub trait Predicate: Send {
+        pub trait Predicate: Send + 'static {
             fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
+
+            fn inner_type_id(&self) -> TypeId {
+                TypeId::of::<Self>()
+            }
         }
     };
 }
@@ -186,7 +190,7 @@ mod tests {
     }
 
     impl FromAny for SetStatusBehaviour {
-        fn from_any(_: impl std::any::Any) -> Option<Self> {
+        fn from_any(_: impl Any) -> Option<Self> {
             Some(Self(None))
         }
     }

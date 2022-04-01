@@ -295,13 +295,13 @@ mod tests {
     }
 
     impl FromAny for RunCountBehaviour {
-        fn from_any(_: impl std::any::Any) -> Option<Self> {
+        fn from_any(_: impl Any) -> Option<Self> {
             Some(Self::default())
         }
     }
 
     impl FromAny for predicate::True {
-        fn from_any(_: impl std::any::Any) -> Option<Self> {
+        fn from_any(_: impl Any) -> Option<Self> {
             Some(Self)
         }
     }

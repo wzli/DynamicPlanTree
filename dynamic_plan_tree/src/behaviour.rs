@@ -6,7 +6,7 @@ macro_rules! behaviour_trait {
     () => {
         /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
-        pub trait Behaviour<C: Config>: Send {
+        pub trait Behaviour<C: Config>: Send + 'static {
             fn status(&self, plan: &Plan<C>) -> Option<bool>;
             fn utility(&self, _plan: &Plan<C>) -> f64 {
                 0.
@@ -14,6 +14,10 @@ macro_rules! behaviour_trait {
             fn on_entry(&mut self, _plan: &mut Plan<C>) {}
             fn on_exit(&mut self, _plan: &mut Plan<C>) {}
             fn on_run(&mut self, _plan: &mut Plan<C>) {}
+
+            fn inner_type_id(&self) -> TypeId {
+                TypeId::of::<Self>()
+            }
         }
     };
 }
@@ -317,5 +321,15 @@ mod tests {
         let root_plan = Plan::<TestConfig>::new(DefaultBehaviour.into(), "root", 1, true);
         // serialize and print root plan
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
+    }
+
+    #[test]
+    fn type_id() {
+        type B = Behaviours<TestConfig>;
+        let a: B = DefaultBehaviour.into();
+        let b: B = AllSuccessStatus.into();
+        assert_ne!(a.inner_type_id(), b.inner_type_id());
+        assert_eq!(a.inner_type_id(), TypeId::of::<DefaultBehaviour>());
+        assert_eq!(b.inner_type_id(), TypeId::of::<AllSuccessStatus>());
     }
 }
