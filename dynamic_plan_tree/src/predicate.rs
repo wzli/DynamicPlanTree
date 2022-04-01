@@ -22,7 +22,7 @@ predicate_trait!();
 
 /// Default set of built-in predicates to serve as example template.
 #[enum_dispatch(Predicate)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, FromAny)]
 pub enum Predicates {
     True,
     False,
@@ -38,24 +38,6 @@ pub enum Predicates {
     AnySuccess,
     AllFailure,
     AnyFailure,
-}
-
-impl FromAny for Predicates {
-    from_any!(
-        True,
-        False,
-        And<Self>,
-        Or<Self>,
-        Xor<Self>,
-        Not<Self>,
-        Nand<Self>,
-        Nor<Self>,
-        Xnor<Self>,
-        AllSuccess,
-        AnySuccess,
-        AllFailure,
-        AnyFailure,
-    );
 }
 
 #[derive(Serialize, Deserialize)]
@@ -199,14 +181,10 @@ mod tests {
     }
 
     #[enum_dispatch(Predicate)]
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, FromAny)]
     enum TestPredicate {
         True,
         False,
-    }
-
-    impl FromAny for TestPredicate {
-        from_any!();
     }
 
     #[derive(Serialize, Deserialize)]

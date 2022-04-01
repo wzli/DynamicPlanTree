@@ -28,7 +28,7 @@ behaviour_trait!();
 
 /// Default set of built-in behaviours to serve as example template.
 #[enum_dispatch(Behaviour<C>)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, FromAny)]
 pub enum Behaviours<C: Config> {
     DefaultBehaviour,
 
@@ -42,10 +42,6 @@ pub enum Behaviours<C: Config> {
     SequenceBehaviour,
     FallbackBehaviour,
     MaxUtilBehaviour,
-}
-
-impl<C: Config> FromAny for Behaviours<C> {
-    from_any!(DefaultBehaviour);
 }
 
 #[derive(Serialize, Deserialize)]

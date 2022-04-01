@@ -13,6 +13,10 @@ pub trait Config: Sized + 'static {
     type Behaviour: Behaviour<Self> + Serialize + DeserializeOwned + FromAny;
 }
 
+pub trait FromAny: Sized {
+    fn from_any(x: impl Any) -> Option<Self>;
+}
+
 /// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
 #[derive(Serialize, Deserialize)]
 pub struct Transition<P> {
