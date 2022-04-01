@@ -9,9 +9,9 @@ pub use serde_json::Value;
 pub use std::time::Duration;
 
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
-pub trait Config {
-    type Predicate: predicate::Predicate + Serialize + DeserializeOwned;
-    type Behaviour: behaviour::Behaviour
+pub trait Config: Sized {
+    type Predicate: Predicate + Serialize + DeserializeOwned;
+    type Behaviour: Behaviour<Self>
         + From<behaviour::DefaultBehaviour>
         + Serialize
         + DeserializeOwned;
@@ -287,17 +287,17 @@ mod tests {
         pub run_count: u32,
     }
 
-    impl behaviour::Behaviour for RunCountBehaviour {
-        fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
+    impl<C: Config> Behaviour<C> for RunCountBehaviour {
+        fn status(&self, _plan: &Plan<C>) -> Option<bool> {
             None
         }
-        fn on_entry(&mut self, _plan: &mut Plan<impl Config>) {
+        fn on_entry(&mut self, _plan: &mut Plan<C>) {
             self.entry_count += 1;
         }
-        fn on_exit(&mut self, _plan: &mut Plan<impl Config>) {
+        fn on_exit(&mut self, _plan: &mut Plan<C>) {
             self.exit_count += 1;
         }
-        fn on_run(&mut self, _plan: &mut Plan<impl Config>) {
+        fn on_run(&mut self, _plan: &mut Plan<C>) {
             self.run_count += 1;
         }
     }

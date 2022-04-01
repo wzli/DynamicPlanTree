@@ -1,4 +1,4 @@
-use crate::{predicate::Predicates, *};
+use crate::*;
 
 /// Macro to redefine `Behaviour` trait in external crates for remote enum_dispatch definition.
 #[macro_export]
@@ -6,33 +6,32 @@ macro_rules! behaviour_trait {
     () => {
         /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
-        pub trait Behaviour: Send {
-            fn status(&self, plan: &Plan<impl Config>) -> Option<bool>;
-            fn utility(&self, _plan: &Plan<impl Config>) -> f64 {
+        pub trait Behaviour<C: Config>: Send {
+            fn status(&self, plan: &Plan<C>) -> Option<bool>;
+            fn utility(&self, _plan: &Plan<C>) -> f64 {
                 0.
             }
-            fn on_entry(&mut self, _plan: &mut Plan<impl Config>) {}
-            fn on_exit(&mut self, _plan: &mut Plan<impl Config>) {}
-            fn on_run(&mut self, _plan: &mut Plan<impl Config>) {}
+            fn on_entry(&mut self, _plan: &mut Plan<C>) {}
+            fn on_exit(&mut self, _plan: &mut Plan<C>) {}
+            fn on_run(&mut self, _plan: &mut Plan<C>) {}
         }
     };
 }
 behaviour_trait!();
 
 /// Default set of built-in behaviours to serve as example template.
-#[enum_dispatch(Behaviour)]
+#[enum_dispatch(Behaviour<C>)]
 #[derive(Serialize, Deserialize)]
-pub enum Behaviours {
+pub enum Behaviours<C: Config> {
     DefaultBehaviour,
 
     AllSuccessStatus,
     AnySuccessStatus,
-    EvaluateStatus(EvaluateStatus<Predicates, Predicates>),
-    ModifyStatus(ModifyStatus<Self>),
+    EvaluateStatus(EvaluateStatus<C>),
+    ModifyStatus(ModifyStatus<C>),
 
-    MultiBehaviour(MultiBehaviour<Self>),
-
-    RepeatBehaviour(RepeatBehaviour<Self, Predicates>),
+    MultiBehaviour(MultiBehaviour<C>),
+    RepeatBehaviour(RepeatBehaviour<C>),
     SequenceBehaviour,
     FallbackBehaviour,
     MaxUtilBehaviour,
@@ -40,88 +39,96 @@ pub enum Behaviours {
 
 #[derive(Serialize, Deserialize)]
 pub struct DefaultBehaviour;
-impl Behaviour for DefaultBehaviour {
-    fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
+impl<C: Config> Behaviour<C> for DefaultBehaviour {
+    fn status(&self, _plan: &Plan<C>) -> Option<bool> {
+        None
+    }
+}
+
+pub fn evaluate_status<C: Config, T: Predicate, F: Predicate>(
+    plan: &Plan<C>,
+    t: &T,
+    f: &F,
+) -> Option<bool> {
+    if f.evaluate(plan, &[]) {
+        Some(false)
+    } else if t.evaluate(plan, &[]) {
+        Some(true)
+    } else {
         None
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EvaluateStatus<T, F>(pub T, pub F);
-impl<T: Predicate, F: Predicate> Behaviour for EvaluateStatus<T, F> {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
-        if self.1.evaluate(plan, &[]) {
-            Some(false)
-        } else if self.0.evaluate(plan, &[]) {
-            Some(true)
-        } else {
-            None
-        }
+pub struct EvaluateStatus<C: Config>(pub C::Predicate, pub C::Predicate);
+impl<C: Config> Behaviour<C> for EvaluateStatus<C> {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
+        evaluate_status(plan, &self.0, &self.1)
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AllSuccessStatus;
-impl Behaviour for AllSuccessStatus {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
-        EvaluateStatus(predicate::AllSuccess, predicate::AnyFailure).status(plan)
+impl<C: Config> Behaviour<C> for AllSuccessStatus {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
+        evaluate_status(plan, &predicate::AllSuccess, &predicate::AnyFailure)
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AnySuccessStatus;
-impl Behaviour for AnySuccessStatus {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
-        EvaluateStatus(predicate::AnySuccess, predicate::AllFailure).status(plan)
+impl<C: Config> Behaviour<C> for AnySuccessStatus {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
+        evaluate_status(plan, &predicate::AnySuccess, &predicate::AllFailure)
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ModifyStatus<B>(pub Box<B>, pub Option<bool>);
-impl<B: Behaviour> Behaviour for ModifyStatus<B> {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+pub struct ModifyStatus<C: Config>(pub Box<C::Behaviour>, pub Option<bool>);
+impl<C: Config> Behaviour<C> for ModifyStatus<C> {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
         self.0.status(plan).map(|x| self.1.unwrap_or(!x))
     }
-    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
+    fn utility(&self, plan: &Plan<C>) -> f64 {
         self.0.utility(plan)
     }
-    fn on_entry(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_entry(&mut self, plan: &mut Plan<C>) {
         self.0.on_entry(plan);
     }
-    fn on_exit(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_exit(&mut self, plan: &mut Plan<C>) {
         self.0.on_exit(plan);
     }
-    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_run(&mut self, plan: &mut Plan<C>) {
         self.0.on_run(plan);
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RepeatBehaviour<B, P> {
-    pub behaviour: Box<B>,
-    pub condition: P,
+pub struct RepeatBehaviour<C: Config> {
+    pub behaviour: Box<C::Behaviour>,
+    pub condition: C::Predicate,
     pub retry: bool,
     pub iterations: usize,
     pub count_down: usize,
     pub status: Option<bool>,
 }
 
-impl<B: Behaviour, P: Predicate> Behaviour for RepeatBehaviour<B, P> {
-    fn status(&self, _plan: &Plan<impl Config>) -> Option<bool> {
+impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
+    fn status(&self, _plan: &Plan<C>) -> Option<bool> {
         self.status
     }
-    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
+    fn utility(&self, plan: &Plan<C>) -> f64 {
         self.behaviour.utility(plan)
     }
-    fn on_entry(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_entry(&mut self, plan: &mut Plan<C>) {
         self.status = None;
         self.count_down = self.iterations;
         self.behaviour.on_entry(plan);
     }
-    fn on_exit(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_exit(&mut self, plan: &mut Plan<C>) {
         self.behaviour.on_exit(plan);
     }
-    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_run(&mut self, plan: &mut Plan<C>) {
         if self.status.is_some() {
             return;
         }
@@ -147,27 +154,27 @@ impl<B: Behaviour, P: Predicate> Behaviour for RepeatBehaviour<B, P> {
 
 #[derive(Serialize, Deserialize)]
 pub struct SequenceBehaviour(Vec<String>);
-impl Behaviour for SequenceBehaviour {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+impl<C: Config> Behaviour<C> for SequenceBehaviour {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
-    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_run(&mut self, plan: &mut Plan<C>) {
         check_visited_status_and_jump(&mut self.0, plan);
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct FallbackBehaviour(Vec<String>);
-impl Behaviour for FallbackBehaviour {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+impl<C: Config> Behaviour<C> for FallbackBehaviour {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
-    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_run(&mut self, plan: &mut Plan<C>) {
         check_visited_status_and_jump(&mut self.0, plan);
     }
 }
 
-fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan<impl Config>) {
+fn check_visited_status_and_jump<C: Config>(visited: &mut Vec<String>, plan: &mut Plan<C>) {
     // find first inactive visited plans that have status none
     let pos = visited.iter().position(|x| match plan.get(x) {
         Some(x) => !x.active() && x.behaviour.status(plan).is_none(),
@@ -194,17 +201,17 @@ fn check_visited_status_and_jump(visited: &mut Vec<String>, plan: &mut Plan<impl
 
 #[derive(Serialize, Deserialize)]
 pub struct MaxUtilBehaviour;
-impl Behaviour for MaxUtilBehaviour {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
-    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
+    fn utility(&self, plan: &Plan<C>) -> f64 {
         match max_utility(&plan.plans) {
             Some((_, util)) => util,
             None => 0.,
         }
     }
-    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_run(&mut self, plan: &mut Plan<C>) {
         // get highest utility plan
         let best = match max_utility(&plan.plans) {
             Some((plan, _)) => plan.name().clone(),
@@ -226,7 +233,7 @@ impl Behaviour for MaxUtilBehaviour {
 }
 
 /// Find and return the plan with higest utility.
-pub fn max_utility(plans: &Vec<Plan<impl Config>>) -> Option<(&Plan<impl Config>, f64)> {
+pub fn max_utility<C: Config>(plans: &Vec<Plan<C>>) -> Option<(&Plan<C>, f64)> {
     if plans.is_empty() {
         None
     } else {
@@ -240,9 +247,9 @@ pub fn max_utility(plans: &Vec<Plan<impl Config>>) -> Option<(&Plan<impl Config>
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MultiBehaviour<B>(pub Vec<B>);
-impl<B: Behaviour> Behaviour for MultiBehaviour<B> {
-    fn status(&self, plan: &Plan<impl Config>) -> Option<bool> {
+pub struct MultiBehaviour<C: Config>(pub Vec<C::Behaviour>);
+impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
         let mut status = Some(true);
         for behaviour in &self.0 {
             match behaviour.status(&plan) {
@@ -253,20 +260,20 @@ impl<B: Behaviour> Behaviour for MultiBehaviour<B> {
         }
         status
     }
-    fn utility(&self, plan: &Plan<impl Config>) -> f64 {
+    fn utility(&self, plan: &Plan<C>) -> f64 {
         self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
     }
-    fn on_entry(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_entry(&mut self, plan: &mut Plan<C>) {
         for behaviour in &mut self.0 {
             behaviour.on_entry(plan);
         }
     }
-    fn on_exit(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_exit(&mut self, plan: &mut Plan<C>) {
         for behaviour in self.0.iter_mut().rev() {
             behaviour.on_exit(plan);
         }
     }
-    fn on_run(&mut self, plan: &mut Plan<impl Config>) {
+    fn on_run(&mut self, plan: &mut Plan<C>) {
         for behaviour in &mut self.0 {
             behaviour.on_run(plan);
         }
@@ -283,7 +290,7 @@ mod tests {
     struct TestConfig;
     impl Config for TestConfig {
         type Predicate = Predicates;
-        type Behaviour = Behaviours;
+        type Behaviour = Behaviours<Self>;
     }
 
     #[test]
@@ -292,7 +299,9 @@ mod tests {
         // generate and print plan schema
         use serde_reflection::{Tracer, TracerConfig};
         let mut tracer = Tracer::new(TracerConfig::default());
-        tracer.trace_simple_type::<Behaviours>().unwrap();
+        tracer
+            .trace_simple_type::<Behaviours<TestConfig>>()
+            .unwrap();
         tracer.trace_simple_type::<Predicates>().unwrap();
         let registry = tracer.registry().unwrap();
         debug!("{}", serde_json::to_string_pretty(&registry).unwrap());

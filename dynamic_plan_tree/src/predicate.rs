@@ -161,8 +161,8 @@ mod tests {
 
     #[derive(Serialize, Deserialize)]
     pub struct SetStatusBehaviour(pub Option<bool>);
-    impl Behaviour for SetStatusBehaviour {
-        fn status(&self, _: &Plan<impl Config>) -> Option<bool> {
+    impl<C: Config> Behaviour<C> for SetStatusBehaviour {
+        fn status(&self, _: &Plan<C>) -> Option<bool> {
             self.0
         }
     }
@@ -183,8 +183,8 @@ mod tests {
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
-        type Behaviour = SetStatusBehaviour;
         type Predicate = TestPredicate;
+        type Behaviour = SetStatusBehaviour;
     }
 
     #[test]
