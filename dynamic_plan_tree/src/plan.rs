@@ -285,6 +285,11 @@ mod tests {
         }
         fn on_entry(&mut self, _plan: &mut Plan<C>) {
             self.entry_count += 1;
+            _plan
+                .behaviour
+                .as_any()
+                .downcast_ref::<RunCountBehaviour>()
+                .unwrap();
         }
         fn on_exit(&mut self, _plan: &mut Plan<C>) {
             self.exit_count += 1;

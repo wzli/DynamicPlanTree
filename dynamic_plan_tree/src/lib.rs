@@ -3,7 +3,7 @@ pub use enum_dispatch::enum_dispatch;
 pub use plan::*;
 pub use predicate::Predicate;
 pub use serde::{Deserialize, Serialize};
-use std::any::{Any, TypeId};
+use std::any::Any;
 
 pub mod behaviour;
 pub mod plan;

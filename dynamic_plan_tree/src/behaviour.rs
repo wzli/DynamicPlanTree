@@ -6,7 +6,7 @@ macro_rules! behaviour_trait {
     () => {
         /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
-        pub trait Behaviour<C: Config>: Send + 'static {
+        pub trait Behaviour<C: Config>: Send + Sized + 'static {
             fn status(&self, plan: &Plan<C>) -> Option<bool>;
             fn utility(&self, _plan: &Plan<C>) -> f64 {
                 0.
@@ -15,8 +15,11 @@ macro_rules! behaviour_trait {
             fn on_exit(&mut self, _plan: &mut Plan<C>) {}
             fn on_run(&mut self, _plan: &mut Plan<C>) {}
 
-            fn inner_type_id(&self) -> TypeId {
-                TypeId::of::<Self>()
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
             }
         }
     };
@@ -324,12 +327,13 @@ mod tests {
     }
 
     #[test]
-    fn type_id() {
+    fn downcast() {
         type B = Behaviours<TestConfig>;
-        let a: B = DefaultBehaviour.into();
-        let b: B = AllSuccessStatus.into();
-        assert_ne!(a.inner_type_id(), b.inner_type_id());
-        assert_eq!(a.inner_type_id(), TypeId::of::<DefaultBehaviour>());
-        assert_eq!(b.inner_type_id(), TypeId::of::<AllSuccessStatus>());
+        let mut a: B = DefaultBehaviour.into();
+        let mut b: B = AllSuccessStatus.into();
+        a.as_any().downcast_ref::<DefaultBehaviour>().unwrap();
+        b.as_any().downcast_ref::<AllSuccessStatus>().unwrap();
+        a.as_any_mut().downcast_mut::<DefaultBehaviour>().unwrap();
+        b.as_any_mut().downcast_mut::<AllSuccessStatus>().unwrap();
     }
 }

@@ -6,11 +6,14 @@ macro_rules! predicate_trait {
     () => {
         /// An object that implements runtime predicate evaluation logic of an active plan.
         #[enum_dispatch]
-        pub trait Predicate: Send + 'static {
+        pub trait Predicate: Send + Sized + 'static {
             fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
 
-            fn inner_type_id(&self) -> TypeId {
-                TypeId::of::<Self>()
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
             }
         }
     };
