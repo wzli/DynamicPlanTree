@@ -1,4 +1,4 @@
-use crate::*;
+pub use crate::*;
 
 /// Macro to redefine `Behaviour` trait in external crates for remote enum_dispatch definition.
 #[macro_export]
