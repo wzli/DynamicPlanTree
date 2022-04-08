@@ -6,7 +6,7 @@ macro_rules! behaviour_trait {
     () => {
         /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
-        pub trait Behaviour<C: Config>: Send + Sized + 'static {
+        pub trait Behaviour<C: Config>: Sized + 'static {
             fn status(&self, plan: &Plan<C>) -> Option<bool>;
             fn utility(&self, _plan: &Plan<C>) -> f64 {
                 0.

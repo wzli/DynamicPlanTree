@@ -11,7 +11,14 @@ pub use serde_value::Value;
 
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config: Sized + 'static {
+    #[cfg(feature = "rayon")]
+    type Predicate: Predicate + Send + Serialize + DeserializeOwned + FromAny;
+    #[cfg(not(feature = "rayon"))]
     type Predicate: Predicate + Serialize + DeserializeOwned + FromAny;
+
+    #[cfg(feature = "rayon")]
+    type Behaviour: Behaviour<Self> + Send + Serialize + DeserializeOwned + FromAny;
+    #[cfg(not(feature = "rayon"))]
     type Behaviour: Behaviour<Self> + Serialize + DeserializeOwned + FromAny;
 }
 
