@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 dynamic_plan_tree_derive = { path = "../dynamic_plan_tree_derive" }
 enum_dispatch = "0.3"
-rayon = "1.5"
-serde = {version = "1.0", features = ["derive"]}
+rayon = { version = "1.5", optional = true }
+serde = { version = "1.0", features = ["derive"]}
 serde-value = "0.7"
 tracing = "0.1"
 

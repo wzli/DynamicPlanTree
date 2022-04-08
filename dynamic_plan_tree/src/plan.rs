@@ -1,6 +1,8 @@
 use crate::*;
 
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
+
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use tracing::{debug, debug_span, Span};
@@ -150,11 +152,11 @@ impl<C: Config> Plan<C> {
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
         // call run() recursively
-        self.plans
-            .iter_mut()
-            .filter(|plan| plan.active)
-            .par_bridge()
-            .for_each(|plan| plan.run());
+        let i = self.plans.iter_mut().filter(|plan| plan.active);
+        #[cfg(feature = "rayon")]
+        i.par_bridge().for_each(|plan| plan.run());
+        #[cfg(not(feature = "rayon"))]
+        i.for_each(|plan| plan.run());
 
         // limit execution frequency
         if self.run_countdown == 0 {
@@ -211,13 +213,19 @@ impl<C: Config> Plan<C> {
             None => self.span = debug_span!("plan", name=%self.name),
         }
         // recursively enter all autostart child plans
-        self.plans
+        let i = self
+            .plans
             .iter_mut()
-            .filter(|plan| plan.autostart && !plan.active)
-            .par_bridge()
-            .for_each(|plan| {
-                plan.enter(Some(&self.span));
-            });
+            .filter(|plan| plan.autostart && !plan.active);
+        #[cfg(feature = "rayon")]
+        i.par_bridge().for_each(|plan| {
+            plan.enter(Some(&self.span));
+        });
+        #[cfg(not(feature = "rayon"))]
+        i.for_each(|plan| {
+            plan.enter(Some(&self.span));
+        });
+
         // trigger on_entry() for self
         self.active = true;
         self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
@@ -230,13 +238,16 @@ impl<C: Config> Plan<C> {
             return false;
         }
         // recursively exit all active child plans
-        self.plans
-            .iter_mut()
-            .filter(|plan| plan.active)
-            .par_bridge()
-            .for_each(|plan| {
-                plan.exit(false);
-            });
+        let i = self.plans.iter_mut().filter(|plan| plan.active);
+        #[cfg(feature = "rayon")]
+        i.par_bridge().for_each(|plan| {
+            plan.exit(false);
+        });
+        #[cfg(not(feature = "rayon"))]
+        i.for_each(|plan| {
+            plan.exit(false);
+        });
+
         if !exclude_self {
             // trigger on_exit() for self
             self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
