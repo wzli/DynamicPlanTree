@@ -161,7 +161,7 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
     }
 }
 
-/// Repeats inner behaviour for specified iterations, until failure encountered, while provided condition holds.
+/// Repeats inner behaviour for specified iterations until failure encountered while condition holds.
 #[derive(Serialize, Deserialize)]
 pub struct RepeatBehaviour<C: Config> {
     /// Behaviour that expects some status on completion to mark each iteration.
@@ -170,7 +170,7 @@ pub struct RepeatBehaviour<C: Config> {
     pub condition: C::Predicate,
     /// Stop running behaviour after specified iterations.
     pub iterations: usize,
-    /// Repeat until behaviour status returns either success or failure.
+    /// Repeat until behaviour status returns `retry` (either success or failure).
     pub retry: bool,
 
     count_down: usize,
@@ -178,9 +178,9 @@ pub struct RepeatBehaviour<C: Config> {
 }
 
 impl<C: Config> RepeatBehaviour<C> {
-    pub fn new(behaviour: impl Into<Box<C::Behaviour>>) -> Self {
+    pub fn new(behaviour: C::Behaviour) -> Self {
         Self {
-            behaviour: behaviour.into(),
+            behaviour: Box::new(behaviour),
             condition: C::Predicate::from_any(predicate::True).unwrap(),
             iterations: usize::MAX,
             retry: false,
@@ -335,7 +335,7 @@ pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use tracing::debug;
+    // use tracing::info;
 
     #[derive(Serialize, Deserialize)]
     struct DefaultConfig;
@@ -380,6 +380,55 @@ mod tests {
         assert_eq!(plan.behaviour.status(&plan), Some(false));
     }
 
+    fn get_behaviour<T: Any>(x: &mut Plan<DefaultConfig>) -> &mut T {
+        x.behaviour.as_any_mut().downcast_mut::<T>().unwrap()
+    }
+
     #[test]
-    fn all_success_status() {}
+    fn repeat_behaviour() {
+        //let _ = tracing_subscriber::fmt::try_init();
+
+        let mut repeat = RepeatBehaviour::new(AllSuccessStatus.into());
+        repeat.iterations = 5;
+        let mut plan = Plan::<DefaultConfig>::new(repeat.into(), "root", 1, true);
+        // test iteration limit
+        for _ in 0..5 {
+            plan.run();
+            assert_eq!(plan.behaviour.status(&plan), None);
+        }
+        plan.run();
+        assert_eq!(plan.behaviour.status(&plan), Some(true));
+
+        // test reset
+        plan.exit(false);
+        for _ in 0..5 {
+            plan.run();
+            assert_eq!(plan.behaviour.status(&plan), None);
+        }
+        plan.run();
+        assert_eq!(plan.behaviour.status(&plan), Some(true));
+
+        // test stop on failure
+        plan.exit(false);
+        for _ in 0..3 {
+            plan.run();
+            assert_eq!(plan.behaviour.status(&plan), None);
+        }
+        get_behaviour::<RepeatBehaviour<DefaultConfig>>(&mut plan).behaviour =
+            Box::new(AnySuccessStatus.into());
+        plan.run();
+        assert_eq!(plan.behaviour.status(&plan), Some(false));
+
+        // test retry bool
+        plan.exit(false);
+        get_behaviour::<RepeatBehaviour<DefaultConfig>>(&mut plan).retry = true;
+        for _ in 0..3 {
+            plan.run();
+            assert_eq!(plan.behaviour.status(&plan), None);
+        }
+        get_behaviour::<RepeatBehaviour<DefaultConfig>>(&mut plan).behaviour =
+            Box::new(AllSuccessStatus.into());
+        plan.run();
+        assert_eq!(plan.behaviour.status(&plan), Some(true));
+    }
 }

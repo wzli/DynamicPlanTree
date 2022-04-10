@@ -64,7 +64,7 @@ impl<C: Config> Plan<C> {
     }
 
     pub fn new(
-        behaviour: impl Into<Box<C::Behaviour>>,
+        behaviour: C::Behaviour,
         name: impl Into<String>,
         run_interval: u32,
         autostart: bool,
@@ -75,7 +75,7 @@ impl<C: Config> Plan<C> {
             run_countdown: 0,
             run_interval,
             autostart,
-            behaviour: behaviour.into(),
+            behaviour: Box::new(behaviour),
             transitions: Vec::new(),
             plans: Vec::new(),
             data: HashMap::new(),
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn generate_schema() {
-        let _ = tracing_subscriber::fmt::try_init();
+        tracing_init();
         // generate and print plan schema
         use serde_reflection::{Tracer, TracerConfig};
         let mut tracer = Tracer::new(TracerConfig::default());
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn generate_plan() {
-        let _ = tracing_subscriber::fmt::try_init();
+        tracing_init();
         let root_plan =
             Plan::<DefaultConfig>::new(behaviour::DefaultBehaviour.into(), "root", 1, true);
         // serialize and print root plan
