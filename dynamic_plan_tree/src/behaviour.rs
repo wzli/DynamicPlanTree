@@ -156,7 +156,7 @@ pub struct RepeatBehaviour<C: Config> {
     /// Behaviour that expects some status on completion to mark each iteration.
     pub behaviour: Box<C::Behaviour>,
     /// Stop running behaviour once condition no longer holds.
-    pub condition: C::Predicate,
+    pub condition: Option<C::Predicate>,
     /// Stop running behaviour after specified iterations.
     pub iterations: usize,
     /// Repeat until behaviour status returns `retry` (either success or failure).
@@ -170,7 +170,7 @@ impl<C: Config> RepeatBehaviour<C> {
     pub fn new(behaviour: C::Behaviour) -> Self {
         Self {
             behaviour: Box::new(behaviour),
-            condition: C::Predicate::from_any(predicate::True).unwrap(),
+            condition: None,
             iterations: usize::MAX,
             retry: false,
             count_down: 0,
@@ -200,7 +200,13 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
             return;
         }
         // stop when countdown runs out or condition doesn't hold
-        if self.count_down == 0 || !self.condition.evaluate(plan, &[]) {
+        if self.count_down == 0
+            || !self
+                .condition
+                .as_ref()
+                .map(|x| x.evaluate(plan, &[]))
+                .unwrap_or(true)
+        {
             self.status = Some(!self.retry);
             return;
         }
@@ -311,10 +317,7 @@ pub struct MaxUtilBehaviour;
 impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
     /// Returns status of currently active child plan.
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
-        plan.plans
-            .iter()
-            .find(|p| p.active())
-            .and_then(|p| p.status())
+        plan.plans.iter().find(|p| p.active())?.status()
     }
     /// Returns max utility of all child plans.
     fn utility(&self, plan: &Plan<C>) -> f64 {

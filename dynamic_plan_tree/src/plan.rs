@@ -64,7 +64,7 @@ impl<C: Config> Plan<C> {
     }
 
     pub fn status(&self) -> Option<bool> {
-        self.behaviour.as_ref().and_then(|b| b.status(self))
+        self.behaviour.as_ref()?.status(self)
     }
 
     pub fn utility(&self) -> f64 {
@@ -75,15 +75,11 @@ impl<C: Config> Plan<C> {
     }
 
     pub fn behaviour_cast<T: Any>(&self) -> Option<&T> {
-        self.behaviour
-            .as_ref()
-            .and_then(|x| x.as_any().downcast_ref::<T>())
+        self.behaviour.as_ref()?.as_any().downcast_ref::<T>()
     }
 
     pub fn behaviour_cast_mut<T: Any>(&mut self) -> Option<&mut T> {
-        self.behaviour
-            .as_mut()
-            .and_then(|x| x.as_any_mut().downcast_mut::<T>())
+        self.behaviour.as_mut()?.as_any_mut().downcast_mut::<T>()
     }
 
     pub fn new(
