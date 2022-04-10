@@ -54,6 +54,7 @@ impl<C: Config> Behaviour<C> for DefaultBehaviour {
     }
 }
 
+/// Returns `false` if `f.evaluate()`, `true` if `t.evaluate()`, otherwise `None`.
 pub fn evaluate_status<C: Config, T: Predicate, F: Predicate>(
     plan: &Plan<C>,
     t: &T,
@@ -68,6 +69,7 @@ pub fn evaluate_status<C: Config, T: Predicate, F: Predicate>(
     }
 }
 
+/// Behaviour with status that invokes `evaluate_status(&self.0, &self.1)`.
 #[derive(Serialize, Deserialize)]
 pub struct EvaluateStatus<C: Config>(pub C::Predicate, pub C::Predicate);
 impl<C: Config> Behaviour<C> for EvaluateStatus<C> {
@@ -76,6 +78,7 @@ impl<C: Config> Behaviour<C> for EvaluateStatus<C> {
     }
 }
 
+/// Behaviour with status `true` if `AllSuccess`, `false` if `AnyFailure`, otherwise `None`.
 #[derive(Serialize, Deserialize)]
 pub struct AllSuccessStatus;
 impl<C: Config> Behaviour<C> for AllSuccessStatus {
@@ -84,6 +87,7 @@ impl<C: Config> Behaviour<C> for AllSuccessStatus {
     }
 }
 
+/// Behaviour with status `true` if `AnySuccess`, `false` if `AllFailure`, otherwise `None`.
 #[derive(Serialize, Deserialize)]
 pub struct AnySuccessStatus;
 impl<C: Config> Behaviour<C> for AnySuccessStatus {
@@ -92,6 +96,7 @@ impl<C: Config> Behaviour<C> for AnySuccessStatus {
     }
 }
 
+/// Wraps inner behaviour. If inner status exist, invert when `self.1` is `None` otherwise use `self.1`.
 #[derive(Serialize, Deserialize)]
 pub struct ModifyStatus<C: Config>(pub Box<C::Behaviour>, pub Option<bool>);
 impl<C: Config> Behaviour<C> for ModifyStatus<C> {
@@ -305,46 +310,48 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::predicate::*;
-    use tracing::debug;
+    // use tracing::debug;
 
     #[derive(Serialize, Deserialize)]
-    struct TestConfig;
-    impl Config for TestConfig {
-        type Predicate = Predicates;
-        type Behaviour = Behaviours<Self>;
+    struct DefaultConfig;
+    impl Config for DefaultConfig {
+        type Predicate = predicate::Predicates;
+        type Behaviour = behaviour::Behaviours<Self>;
     }
 
     #[test]
-    fn generate_schema() {
-        let _ = tracing_subscriber::fmt::try_init();
-        // generate and print plan schema
-        use serde_reflection::{Tracer, TracerConfig};
-        let mut tracer = Tracer::new(TracerConfig::default());
-        tracer
-            .trace_simple_type::<Behaviours<TestConfig>>()
-            .unwrap();
-        tracer.trace_simple_type::<Predicates>().unwrap();
-        let registry = tracer.registry().unwrap();
-        debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
-    }
+    fn evaluate_status() {
+        let make_plan = |t: bool, f: bool| {
+            Plan::<DefaultConfig>::new(
+                EvaluateStatus(
+                    if t {
+                        predicate::True.into()
+                    } else {
+                        predicate::False.into()
+                    },
+                    if f {
+                        predicate::True.into()
+                    } else {
+                        predicate::False.into()
+                    },
+                )
+                .into(),
+                "root",
+                1,
+                true,
+            )
+        };
 
-    #[test]
-    fn generate_plan() {
-        let _ = tracing_subscriber::fmt::try_init();
-        let root_plan = Plan::<TestConfig>::new(DefaultBehaviour.into(), "root", 1, true);
-        // serialize and print root plan
-        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
-    }
+        let plan = make_plan(false, false);
+        assert_eq!(plan.behaviour.status(&plan), None);
 
-    #[test]
-    fn downcast() {
-        type B = Behaviours<TestConfig>;
-        let mut a: B = DefaultBehaviour.into();
-        let mut b: B = AllSuccessStatus.into();
-        a.as_any().downcast_ref::<DefaultBehaviour>().unwrap();
-        b.as_any().downcast_ref::<AllSuccessStatus>().unwrap();
-        a.as_any_mut().downcast_mut::<DefaultBehaviour>().unwrap();
-        b.as_any_mut().downcast_mut::<AllSuccessStatus>().unwrap();
+        let plan = make_plan(false, true);
+        assert_eq!(plan.behaviour.status(&plan), Some(false));
+
+        let plan = make_plan(true, false);
+        assert_eq!(plan.behaviour.status(&plan), Some(true));
+
+        let plan = make_plan(true, true);
+        assert_eq!(plan.behaviour.status(&plan), Some(false));
     }
 }

@@ -434,4 +434,46 @@ mod tests {
             assert_eq!(sm.run_count, run_cycles);
         }
     }
+
+    #[derive(Serialize, Deserialize)]
+    struct DefaultConfig;
+    impl Config for DefaultConfig {
+        type Predicate = predicate::Predicates;
+        type Behaviour = behaviour::Behaviours<Self>;
+    }
+
+    #[test]
+    fn generate_schema() {
+        let _ = tracing_subscriber::fmt::try_init();
+        // generate and print plan schema
+        use serde_reflection::{Tracer, TracerConfig};
+        let mut tracer = Tracer::new(TracerConfig::default());
+        tracer
+            .trace_simple_type::<behaviour::Behaviours<DefaultConfig>>()
+            .unwrap();
+        tracer.trace_simple_type::<predicate::Predicates>().unwrap();
+        let registry = tracer.registry().unwrap();
+        debug!("{}", serde_json::to_string_pretty(&registry).unwrap());
+    }
+
+    #[test]
+    fn generate_plan() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let root_plan =
+            Plan::<DefaultConfig>::new(behaviour::DefaultBehaviour.into(), "root", 1, true);
+        // serialize and print root plan
+        debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
+    }
+
+    #[test]
+    fn downcast() {
+        use behaviour::*;
+        type B = Behaviours<DefaultConfig>;
+        let mut a: B = DefaultBehaviour.into();
+        let mut b: B = AllSuccessStatus.into();
+        a.as_any().downcast_ref::<DefaultBehaviour>().unwrap();
+        b.as_any().downcast_ref::<AllSuccessStatus>().unwrap();
+        a.as_any_mut().downcast_mut::<DefaultBehaviour>().unwrap();
+        b.as_any_mut().downcast_mut::<AllSuccessStatus>().unwrap();
+    }
 }
