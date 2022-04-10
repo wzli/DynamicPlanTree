@@ -46,6 +46,7 @@ pub enum Behaviours<C: Config> {
     MaxUtilBehaviour,
 }
 
+/// Empty behaviour used as default placeholder. Must be included in custom behaviour sets.
 #[derive(Serialize, Deserialize)]
 pub struct DefaultBehaviour;
 impl<C: Config> Behaviour<C> for DefaultBehaviour {
@@ -96,7 +97,7 @@ impl<C: Config> Behaviour<C> for AnySuccessStatus {
     }
 }
 
-/// Wraps inner behaviour. If inner status exist, invert when `self.1` is `None` otherwise use `self.1`.
+/// Wraps inner behaviour. If inner status exists, invert when `self.1` is `None` otherwise use `self.1`.
 #[derive(Serialize, Deserialize)]
 pub struct ModifyStatus<C: Config>(pub Box<C::Behaviour>, pub Option<bool>);
 impl<C: Config> Behaviour<C> for ModifyStatus<C> {
@@ -120,6 +121,7 @@ impl<C: Config> Behaviour<C> for ModifyStatus<C> {
     }
 }
 
+/// Vector of behaviours sharing the same plan. Status takes aggregate AND. Utility takes aggregate sum.
 #[derive(Serialize, Deserialize)]
 pub struct MultiBehaviour<C: Config>(pub Vec<C::Behaviour>);
 impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
@@ -143,7 +145,7 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
         }
     }
     fn on_exit(&mut self, plan: &mut Plan<C>) {
-        for behaviour in self.0.iter_mut().rev() {
+        for behaviour in &mut self.0 {
             behaviour.on_exit(plan);
         }
     }
@@ -159,14 +161,33 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
     }
 }
 
+/// Repeats inner behaviour for specified iterations, until failure encountered, while provided condition holds.
 #[derive(Serialize, Deserialize)]
 pub struct RepeatBehaviour<C: Config> {
+    /// Behaviour that expects some status on completion to mark each iteration.
     pub behaviour: Box<C::Behaviour>,
+    /// Stop running behaviour once condition no longer holds.
     pub condition: C::Predicate,
-    pub retry: bool,
+    /// Stop running behaviour after specified iterations.
     pub iterations: usize,
-    pub count_down: usize,
-    pub status: Option<bool>,
+    /// Repeat until behaviour status returns either success or failure.
+    pub retry: bool,
+
+    count_down: usize,
+    status: Option<bool>,
+}
+
+impl<C: Config> RepeatBehaviour<C> {
+    pub fn new(behaviour: impl Into<Box<C::Behaviour>>) -> Self {
+        Self {
+            behaviour: behaviour.into(),
+            condition: C::Predicate::from_any(predicate::True).unwrap(),
+            iterations: usize::MAX,
+            retry: false,
+            count_down: 0,
+            status: None,
+        }
+    }
 }
 
 impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
@@ -185,21 +206,26 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
         self.behaviour.on_exit(plan);
     }
     fn on_pre_run(&mut self, plan: &mut Plan<C>) {
-        if self.status.is_none() {
-            self.behaviour.on_pre_run(plan);
-        }
-    }
-    fn on_run(&mut self, plan: &mut Plan<C>) {
+        // run only while status is indeterminant
         if self.status.is_some() {
             return;
         }
+        // stop when countdown runs out or condition doesn't hold
         if self.count_down == 0 || !self.condition.evaluate(plan, &[]) {
             self.status = Some(!self.retry);
             return;
         }
+        self.behaviour.on_pre_run(plan);
+    }
+    fn on_run(&mut self, plan: &mut Plan<C>) {
+        // run only while status is indeterminant
+        if self.status.is_some() {
+            return;
+        }
         self.behaviour.on_run(plan);
-        if let Some(success) = self.behaviour.status(plan) {
-            if success != self.retry {
+        // tick countdown only when inner behaviour return some status
+        if let Some(status) = self.behaviour.status(plan) {
+            if status != self.retry {
                 // if success, decrement countdown and reset behaviour
                 self.count_down -= 1;
                 self.behaviour.on_exit(plan);
@@ -209,7 +235,6 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
                 self.status = Some(self.retry);
             }
         }
-        // otherwise keep running behaviour
     }
 }
 

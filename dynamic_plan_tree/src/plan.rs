@@ -64,7 +64,7 @@ impl<C: Config> Plan<C> {
     }
 
     pub fn new(
-        behaviour: C::Behaviour,
+        behaviour: impl Into<Box<C::Behaviour>>,
         name: impl Into<String>,
         run_interval: u32,
         autostart: bool,
@@ -75,7 +75,7 @@ impl<C: Config> Plan<C> {
             run_countdown: 0,
             run_interval,
             autostart,
-            behaviour: Box::new(behaviour),
+            behaviour: behaviour.into(),
             transitions: Vec::new(),
             plans: Vec::new(),
             data: HashMap::new(),
