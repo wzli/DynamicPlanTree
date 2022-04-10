@@ -214,6 +214,9 @@ impl<C: Config> Plan<C> {
         if self.active {
             return false;
         }
+        // trigger on_entry() for self
+        self.active = true;
+        self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
         // create new span
         match parent_span {
             Some(x) => self.span = debug_span!(parent: x, "plan", name=%self.name),
@@ -232,10 +235,6 @@ impl<C: Config> Plan<C> {
         i.for_each(|plan| {
             plan.enter(Some(&self.span));
         });
-
-        // trigger on_entry() for self
-        self.active = true;
-        self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
         true
     }
 
@@ -254,9 +253,8 @@ impl<C: Config> Plan<C> {
         i.for_each(|plan| {
             plan.exit(false);
         });
-
+        // trigger on_exit() for self
         if !exclude_self {
-            // trigger on_exit() for self
             self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
             self.active = false;
             self.span = Span::none();
