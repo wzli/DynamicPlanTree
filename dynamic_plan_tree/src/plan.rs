@@ -158,6 +158,9 @@ impl<C: Config> Plan<C> {
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
+        // call on_pre_run() before children behaviours run()
+        self.call(|behaviour, plan| behaviour.on_pre_run(plan), "pre_run");
+
         // call run() recursively
         let i = self.plans.iter_mut().filter(|plan| plan.active);
         #[cfg(feature = "rayon")]
@@ -167,7 +170,7 @@ impl<C: Config> Plan<C> {
 
         // limit execution frequency
         if self.run_countdown == 0 {
-            // run the state machine of this plan
+            // run the behaviour of this plan
             self.call(|behaviour, plan| behaviour.on_run(plan), "run");
             self.run_countdown = self.run_interval;
         }

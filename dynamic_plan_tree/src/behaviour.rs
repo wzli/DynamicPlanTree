@@ -13,6 +13,8 @@ macro_rules! behaviour_trait {
             }
             fn on_entry(&mut self, _plan: &mut Plan<C>) {}
             fn on_exit(&mut self, _plan: &mut Plan<C>) {}
+
+            fn on_pre_run(&mut self, _plan: &mut Plan<C>) {}
             fn on_run(&mut self, _plan: &mut Plan<C>) {}
 
             fn as_any(&self) -> &dyn Any {
@@ -105,6 +107,9 @@ impl<C: Config> Behaviour<C> for ModifyStatus<C> {
     fn on_exit(&mut self, plan: &mut Plan<C>) {
         self.0.on_exit(plan);
     }
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+        self.0.on_pre_run(plan);
+    }
     fn on_run(&mut self, plan: &mut Plan<C>) {
         self.0.on_run(plan);
     }
@@ -134,6 +139,11 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
     }
     fn on_exit(&mut self, plan: &mut Plan<C>) {
         self.behaviour.on_exit(plan);
+    }
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+        if self.status.is_none() {
+            self.behaviour.on_pre_run(plan);
+        }
     }
     fn on_run(&mut self, plan: &mut Plan<C>) {
         if self.status.is_some() {
@@ -165,7 +175,7 @@ impl<C: Config> Behaviour<C> for SequenceBehaviour {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
-    fn on_run(&mut self, plan: &mut Plan<C>) {
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
         check_visited_status_and_jump(&mut self.0, plan);
     }
 }
@@ -176,7 +186,7 @@ impl<C: Config> Behaviour<C> for FallbackBehaviour {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
-    fn on_run(&mut self, plan: &mut Plan<C>) {
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
         check_visited_status_and_jump(&mut self.0, plan);
     }
 }
@@ -218,7 +228,7 @@ impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
             None => 0.,
         }
     }
-    fn on_run(&mut self, plan: &mut Plan<C>) {
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
         // get highest utility plan
         let best = match max_utility(&plan.plans) {
             Some((plan, _)) => plan.name().clone(),
@@ -278,6 +288,11 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
     fn on_exit(&mut self, plan: &mut Plan<C>) {
         for behaviour in self.0.iter_mut().rev() {
             behaviour.on_exit(plan);
+        }
+    }
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+        for behaviour in &mut self.0 {
+            behaviour.on_pre_run(plan);
         }
     }
     fn on_run(&mut self, plan: &mut Plan<C>) {
