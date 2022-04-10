@@ -63,6 +63,14 @@ impl<C: Config> Plan<C> {
         self.run_countdown
     }
 
+    pub fn status(&self) -> Option<bool> {
+        self.behaviour.status(self)
+    }
+
+    pub fn utility(&self) -> f64 {
+        self.behaviour.utility(self)
+    }
+
     pub fn new(
         behaviour: C::Behaviour,
         name: impl Into<String>,

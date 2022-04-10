@@ -238,32 +238,50 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+/// Behaviour that sequentially transitions through child plans until first failure.
+///
+/// # Transitions
+/// Plan is expected to contain transitions that form a linear seqeunce
+/// with only one child plan active at a time. Behaviour is undefined otherwise.
+///
+/// If the status of any previously visited child plan changes from success,
+/// the sequence will transition back to that point.
+///
+/// # Status
+/// - Success when all child plans succeed.
+/// - Failure when any child plan fails.
+/// - None while otherwise in-progress.
+#[derive(Serialize, Deserialize, Default)]
 pub struct SequenceBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for SequenceBehaviour {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
     fn on_pre_run(&mut self, plan: &mut Plan<C>) {
-        check_visited_status_and_jump(&mut self.0, plan);
+        check_visited_status_and_jump(plan, &mut self.0, false);
     }
 }
 
-#[derive(Serialize, Deserialize)]
+/// Behaviour that sequentially transitions through child plans until first success.
+#[derive(Serialize, Deserialize, Default)]
 pub struct FallbackBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for FallbackBehaviour {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
     fn on_pre_run(&mut self, plan: &mut Plan<C>) {
-        check_visited_status_and_jump(&mut self.0, plan);
+        check_visited_status_and_jump(plan, &mut self.0, true);
     }
 }
 
-fn check_visited_status_and_jump<C: Config>(visited: &mut Vec<String>, plan: &mut Plan<C>) {
-    // find first inactive visited plans that have status none
+fn check_visited_status_and_jump<C: Config>(
+    plan: &mut Plan<C>,
+    visited: &mut Vec<String>,
+    jump_val: bool,
+) {
+    // find first inactive visited plans that has status none
     let pos = visited.iter().position(|x| match plan.get(x) {
-        Some(x) => !x.active() && x.behaviour.status(plan).is_none(),
+        Some(x) => !x.active() && x.status().map(|x| x == jump_val).unwrap_or(true),
         None => false,
     });
     // jump back to that plan
@@ -278,9 +296,10 @@ fn check_visited_status_and_jump<C: Config>(visited: &mut Vec<String>, plan: &mu
         None => return,
     };
     // add active plan to visited if not already
-    match visited.last() {
-        Some(last) if last == active => return,
-        _ => {}
+    if let Some(last) = visited.last() {
+        if last == active {
+            return;
+        }
     }
     visited.push(active.clone());
 }
@@ -325,7 +344,7 @@ pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
     } else {
         let (pos, utility) = plans
             .iter()
-            .map(|plan| plan.behaviour.utility(plan))
+            .map(|plan| plan.utility())
             .enumerate()
             .fold((0, f64::NAN), |max, x| if max.1 > x.1 { max } else { x });
         Some((&plans[pos], utility))
@@ -335,7 +354,6 @@ pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use tracing::info;
 
     #[derive(Serialize, Deserialize)]
     struct DefaultConfig;
@@ -343,11 +361,12 @@ mod tests {
         type Predicate = predicate::Predicates;
         type Behaviour = behaviour::Behaviours<Self>;
     }
+    type DC = DefaultConfig;
 
     #[test]
     fn evaluate_status() {
         let make_plan = |t: bool, f: bool| {
-            Plan::<DefaultConfig>::new(
+            Plan::<DC>::new(
                 EvaluateStatus(
                     if t {
                         predicate::True.into()
@@ -368,67 +387,114 @@ mod tests {
         };
 
         let plan = make_plan(false, false);
-        assert_eq!(plan.behaviour.status(&plan), None);
+        assert_eq!(plan.status(), None);
 
         let plan = make_plan(false, true);
-        assert_eq!(plan.behaviour.status(&plan), Some(false));
+        assert_eq!(plan.status(), Some(false));
 
         let plan = make_plan(true, false);
-        assert_eq!(plan.behaviour.status(&plan), Some(true));
+        assert_eq!(plan.status(), Some(true));
 
         let plan = make_plan(true, true);
-        assert_eq!(plan.behaviour.status(&plan), Some(false));
+        assert_eq!(plan.status(), Some(false));
     }
 
-    fn get_behaviour<T: Any>(x: &mut Plan<DefaultConfig>) -> &mut T {
+    fn get_behaviour<T: Any>(x: &mut Plan<DC>) -> &mut T {
         x.behaviour.as_any_mut().downcast_mut::<T>().unwrap()
     }
 
     #[test]
     fn repeat_behaviour() {
+        //use tracing::info;
         //let _ = tracing_subscriber::fmt::try_init();
 
         let mut repeat = RepeatBehaviour::new(AllSuccessStatus.into());
         repeat.iterations = 5;
-        let mut plan = Plan::<DefaultConfig>::new(repeat.into(), "root", 1, true);
+        let mut plan = Plan::<DC>::new(repeat.into(), "root", 1, true);
         // test iteration limit
         for _ in 0..5 {
             plan.run();
-            assert_eq!(plan.behaviour.status(&plan), None);
+            assert_eq!(plan.status(), None);
         }
         plan.run();
-        assert_eq!(plan.behaviour.status(&plan), Some(true));
+        assert_eq!(plan.status(), Some(true));
 
         // test reset
         plan.exit(false);
         for _ in 0..5 {
             plan.run();
-            assert_eq!(plan.behaviour.status(&plan), None);
+            assert_eq!(plan.status(), None);
         }
         plan.run();
-        assert_eq!(plan.behaviour.status(&plan), Some(true));
+        assert_eq!(plan.status(), Some(true));
 
         // test stop on failure
         plan.exit(false);
         for _ in 0..3 {
             plan.run();
-            assert_eq!(plan.behaviour.status(&plan), None);
+            assert_eq!(plan.status(), None);
         }
-        get_behaviour::<RepeatBehaviour<DefaultConfig>>(&mut plan).behaviour =
+        get_behaviour::<RepeatBehaviour<DC>>(&mut plan).behaviour =
             Box::new(AnySuccessStatus.into());
         plan.run();
-        assert_eq!(plan.behaviour.status(&plan), Some(false));
+        assert_eq!(plan.status(), Some(false));
 
         // test retry bool
         plan.exit(false);
-        get_behaviour::<RepeatBehaviour<DefaultConfig>>(&mut plan).retry = true;
+        get_behaviour::<RepeatBehaviour<DC>>(&mut plan).retry = true;
         for _ in 0..3 {
             plan.run();
-            assert_eq!(plan.behaviour.status(&plan), None);
+            assert_eq!(plan.status(), None);
         }
-        get_behaviour::<RepeatBehaviour<DefaultConfig>>(&mut plan).behaviour =
+        get_behaviour::<RepeatBehaviour<DC>>(&mut plan).behaviour =
             Box::new(AllSuccessStatus.into());
         plan.run();
-        assert_eq!(plan.behaviour.status(&plan), Some(true));
+        assert_eq!(plan.status(), Some(true));
+    }
+
+    #[test]
+    fn sequence_behaviour() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let mut plan = Plan::<DC>::new(SequenceBehaviour::default().into(), "root", 1, true);
+        // the first 5 child plans return success
+        for i in 0..5 {
+            plan.insert(Plan::new(AllSuccessStatus.into(), i.to_string(), 0, i == 0));
+            plan.transitions.push(Transition {
+                src: vec![i.to_string()],
+                dst: vec![(i + 1).to_string()],
+                predicate: predicate::True.into(),
+            });
+        }
+        // the last child plan returns None
+        plan.insert(Plan::new(DefaultBehaviour.into(), "5", 0, false));
+        // check that child plans sequentually transition as long current child status succeeds
+        for i in 0..5 {
+            plan.run();
+            let active = plan.plans.iter().find(|x| x.active()).unwrap().name();
+            assert_eq!(active, &(i + 1).to_string());
+            assert_eq!(plan.status(), None);
+        }
+        // check that child plans stop transitioning when current child status is None
+        for _ in 0..5 {
+            plan.run();
+            let active = plan.plans.iter().find(|x| x.active()).unwrap().name();
+            assert_eq!(active, "5");
+            assert_eq!(plan.status(), None);
+        }
+        // change the last child plan to success as well
+        plan.insert(Plan::new(AllSuccessStatus.into(), "5", 0, false));
+        // expect sequence behaviour to return success when all children are successful
+        plan.run();
+        assert_eq!(plan.status(), Some(true));
+        // expect that sequence will jump back to previusly successful child if status changes
+        plan.insert(Plan::new(DefaultBehaviour.into(), "3", 0, false));
+        plan.run();
+        assert_eq!(plan.plans.iter().find(|x| x.active()).unwrap().name(), "3");
+        assert_eq!(plan.status(), None);
+        // same test above with failure status instead
+        plan.insert(Plan::new(AnySuccessStatus.into(), "1", 0, false));
+        plan.run();
+        assert_eq!(plan.plans.iter().find(|x| x.active()).unwrap().name(), "1");
+        assert_eq!(plan.status(), Some(false));
     }
 }
