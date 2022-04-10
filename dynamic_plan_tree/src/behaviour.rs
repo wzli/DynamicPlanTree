@@ -121,6 +121,45 @@ impl<C: Config> Behaviour<C> for ModifyStatus<C> {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct MultiBehaviour<C: Config>(pub Vec<C::Behaviour>);
+impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
+    fn status(&self, plan: &Plan<C>) -> Option<bool> {
+        let mut status = Some(true);
+        for behaviour in &self.0 {
+            match behaviour.status(plan) {
+                Some(true) => {}
+                Some(false) => return Some(false),
+                None => status = None,
+            }
+        }
+        status
+    }
+    fn utility(&self, plan: &Plan<C>) -> f64 {
+        self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
+    }
+    fn on_entry(&mut self, plan: &mut Plan<C>) {
+        for behaviour in &mut self.0 {
+            behaviour.on_entry(plan);
+        }
+    }
+    fn on_exit(&mut self, plan: &mut Plan<C>) {
+        for behaviour in self.0.iter_mut().rev() {
+            behaviour.on_exit(plan);
+        }
+    }
+    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+        for behaviour in &mut self.0 {
+            behaviour.on_pre_run(plan);
+        }
+    }
+    fn on_run(&mut self, plan: &mut Plan<C>) {
+        for behaviour in &mut self.0 {
+            behaviour.on_run(plan);
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct RepeatBehaviour<C: Config> {
     pub behaviour: Box<C::Behaviour>,
     pub condition: C::Predicate,
@@ -268,45 +307,6 @@ pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct MultiBehaviour<C: Config>(pub Vec<C::Behaviour>);
-impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
-    fn status(&self, plan: &Plan<C>) -> Option<bool> {
-        let mut status = Some(true);
-        for behaviour in &self.0 {
-            match behaviour.status(plan) {
-                Some(true) => {}
-                Some(false) => return Some(false),
-                None => status = None,
-            }
-        }
-        status
-    }
-    fn utility(&self, plan: &Plan<C>) -> f64 {
-        self.0.iter().map(|behaviour| behaviour.utility(plan)).sum()
-    }
-    fn on_entry(&mut self, plan: &mut Plan<C>) {
-        for behaviour in &mut self.0 {
-            behaviour.on_entry(plan);
-        }
-    }
-    fn on_exit(&mut self, plan: &mut Plan<C>) {
-        for behaviour in self.0.iter_mut().rev() {
-            behaviour.on_exit(plan);
-        }
-    }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
-        for behaviour in &mut self.0 {
-            behaviour.on_pre_run(plan);
-        }
-    }
-    fn on_run(&mut self, plan: &mut Plan<C>) {
-        for behaviour in &mut self.0 {
-            behaviour.on_run(plan);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -354,4 +354,7 @@ mod tests {
         let plan = make_plan(true, true);
         assert_eq!(plan.behaviour.status(&plan), Some(false));
     }
+
+    #[test]
+    fn all_success_status() {}
 }
