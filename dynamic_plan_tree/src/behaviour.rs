@@ -246,15 +246,13 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
 ///
 /// If the status of any previously visited child plan changes from success,
 /// the sequence will transition back to that point.
-///
-/// # Status
-/// - Success when all child plans succeed.
-/// - Failure when any child plan fails.
-/// - None while otherwise in-progress.
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct SequenceBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for SequenceBehaviour {
+    /// - Success when all child plans succeed.
+    /// - Failure when any child plan fails.
+    /// - None while otherwise in-progress.
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
@@ -271,15 +269,13 @@ impl<C: Config> Behaviour<C> for SequenceBehaviour {
 ///
 /// If the status of any previously visited child plan changes from failure,
 /// the sequence will transition back to that point.
-///
-/// # Status
-/// - Success when any child plans succeeds.
-/// - Failure when all child plan fail.
-/// - None while otherwise in-progress.
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct FallbackBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for FallbackBehaviour {
+    /// - Success when any child plans succeeds.
+    /// - Failure when all child plan fail.
+    /// - None while otherwise in-progress.
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
@@ -318,12 +314,20 @@ fn check_visited_status_and_jump<C: Config>(
     visited.push(active.clone());
 }
 
+/// Behaviour that monitors and transitions to the child plan with highest utility.
+///
+/// Plan is expected to contain no transitions, with only one child active at a time. Behaviour is undefined otherwise.
 #[derive(Serialize, Deserialize)]
 pub struct MaxUtilBehaviour;
 impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
+    /// Returns status of currently active child plan.
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
-        AnySuccessStatus.status(plan)
+        plan.plans
+            .iter()
+            .find(|p| p.active())
+            .and_then(|p| p.status())
     }
+    /// Returns max utility of all child plans.
     fn utility(&self, plan: &Plan<C>) -> f64 {
         match max_utility(&plan.plans) {
             Some((_, util)) => util,
@@ -421,7 +425,6 @@ mod tests {
     fn repeat_behaviour() {
         //use tracing::info;
         //let _ = tracing_subscriber::fmt::try_init();
-
         let mut repeat = RepeatBehaviour::new(AllSuccessStatus.into());
         repeat.iterations = 5;
         let mut plan = Plan::<DC>::new(repeat.into(), "root", 1, true);
@@ -468,7 +471,8 @@ mod tests {
 
     #[test]
     fn sequence_behaviour() {
-        let _ = tracing_subscriber::fmt::try_init();
+        //use tracing::info;
+        //let _ = tracing_subscriber::fmt::try_init();
         let mut plan = Plan::<DC>::new(SequenceBehaviour::default().into(), "root", 1, true);
         // the first 5 child plans return success
         for i in 0..5 {
@@ -510,5 +514,38 @@ mod tests {
         plan.run();
         assert_eq!(plan.plans.iter().find(|x| x.active()).unwrap().name(), "1");
         assert_eq!(plan.status(), Some(false));
+    }
+
+    #[test]
+    fn max_util_behaviour() {
+        #[derive(Serialize, Deserialize)]
+        pub struct SetUtilBehaviour(f64);
+        impl<C: Config> Behaviour<C> for SetUtilBehaviour {
+            fn status(&self, _plan: &Plan<C>) -> Option<bool> {
+                None
+            }
+            fn utility(&self, _plan: &Plan<C>) -> f64 {
+                self.0
+            }
+        }
+
+        #[enum_dispatch(Behaviour<C>)]
+        #[derive(Serialize, Deserialize, FromAny)]
+        pub enum TestBehaviours<C: Config> {
+            DefaultBehaviour,
+            EvaluateStatus(EvaluateStatus<C>),
+            MaxUtilBehaviour,
+            SetUtilBehaviour,
+        }
+
+        #[derive(Serialize, Deserialize)]
+        struct TestConfig;
+        impl Config for TestConfig {
+            type Predicate = predicate::True;
+            type Behaviour = TestBehaviours<Self>;
+        }
+        // type TC = TestConfig;
+        //use tracing::info;
+        //let _ = tracing_subscriber::fmt::try_init();
     }
 }

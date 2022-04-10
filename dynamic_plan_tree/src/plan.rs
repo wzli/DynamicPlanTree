@@ -342,12 +342,6 @@ mod tests {
         }
     }
 
-    impl FromAny for predicate::True {
-        fn from_any(_: impl Any) -> Option<Self> {
-            Some(Self)
-        }
-    }
-
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
