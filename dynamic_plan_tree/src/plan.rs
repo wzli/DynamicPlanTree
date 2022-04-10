@@ -159,7 +159,9 @@ impl<C: Config> Plan<C> {
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
         // call on_pre_run() before children behaviours run()
-        self.call(|behaviour, plan| behaviour.on_pre_run(plan), "pre_run");
+        if self.run_interval > 0 && self.run_countdown == 0 {
+            self.call(|behaviour, plan| behaviour.on_pre_run(plan), "pre_run");
+        }
 
         // call run() recursively
         let i = self.plans.iter_mut().filter(|plan| plan.active);
@@ -169,6 +171,9 @@ impl<C: Config> Plan<C> {
         i.for_each(|plan| plan.run());
 
         // limit execution frequency
+        if self.run_interval == 0 {
+            return;
+        }
         if self.run_countdown == 0 {
             // run the behaviour of this plan
             self.call(|behaviour, plan| behaviour.on_run(plan), "run");
