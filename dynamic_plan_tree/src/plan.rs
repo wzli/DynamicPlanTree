@@ -42,7 +42,7 @@ pub struct Plan<C: Config> {
     run_countdown: u32,
     pub run_interval: u32,
     pub autostart: bool,
-    pub behaviour: Box<C::Behaviour>,
+    pub behaviour: Option<Box<C::Behaviour>>,
     pub transitions: Vec<Transition<C::Predicate>>,
     pub plans: Vec<Self>,
     pub data: HashMap<String, Value>,
@@ -64,11 +64,26 @@ impl<C: Config> Plan<C> {
     }
 
     pub fn status(&self) -> Option<bool> {
-        self.behaviour.status(self)
+        self.behaviour.as_ref().and_then(|b| b.status(self))
     }
 
     pub fn utility(&self) -> f64 {
-        self.behaviour.utility(self)
+        self.behaviour
+            .as_ref()
+            .map(|b| b.utility(self))
+            .unwrap_or(0.)
+    }
+
+    pub fn behaviour_cast<T: Any>(&self) -> Option<&T> {
+        self.behaviour
+            .as_ref()
+            .and_then(|x| x.as_any().downcast_ref::<T>())
+    }
+
+    pub fn behaviour_cast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        self.behaviour
+            .as_mut()
+            .and_then(|x| x.as_any_mut().downcast_mut::<T>())
     }
 
     pub fn new(
@@ -77,13 +92,20 @@ impl<C: Config> Plan<C> {
         run_interval: u32,
         autostart: bool,
     ) -> Self {
+        let mut s = Self::new_stub(name, autostart);
+        s.run_interval = run_interval;
+        s.behaviour = Some(Box::new(behaviour));
+        s
+    }
+
+    pub fn new_stub(name: impl Into<String>, autostart: bool) -> Self {
         Self {
             name: name.into(),
             active: false,
             run_countdown: 0,
-            run_interval,
+            run_interval: 0,
             autostart,
-            behaviour: Box::new(behaviour),
+            behaviour: None,
             transitions: Vec::new(),
             plans: Vec::new(),
             data: HashMap::new(),
@@ -92,22 +114,22 @@ impl<C: Config> Plan<C> {
     }
 
     pub fn insert(&mut self, mut plan: Self) -> &mut Self {
-        // sorted insert
-        let found = self.find(&plan.name);
-        let pos = found.unwrap_or_else(|x| x);
         debug!(parent: &self.span, plan=%plan.name, "insert");
         if plan.active {
             if self.active {
+                // create new span if this plan and inserted plan is active
                 plan.span = debug_span!(parent: &self.span, "plan", name=%plan.name);
-            } else {
-                plan.exit(false);
             }
+        } else {
+            // exit inserted span if this plan is inactive
+            plan.exit(false);
         }
-        match found {
+        // sorted insert
+        let (pos, _) = match self.find(&plan.name) {
             // overwrite if there is already one
-            Ok(_) => self.plans[pos] = plan,
-            Err(_) => self.plans.insert(pos, plan),
-        }
+            Ok(pos) => (pos, self.plans[pos] = plan),
+            Err(pos) => (pos, self.plans.insert(pos, plan)),
+        };
         &mut self.plans[pos]
     }
 
@@ -200,15 +222,7 @@ impl<C: Config> Plan<C> {
             Ok(pos) => pos,
             // if plan doesn't exist, create and insert a default plan
             Err(pos) => {
-                self.plans.insert(
-                    pos,
-                    Self::new(
-                        C::Behaviour::from_any(behaviour::DefaultBehaviour).unwrap(),
-                        name,
-                        0,
-                        false,
-                    ),
-                );
+                self.plans.insert(pos, Self::new_stub(name, false));
                 pos
             }
         };
@@ -230,14 +244,14 @@ impl<C: Config> Plan<C> {
         if self.active {
             return false;
         }
-        // trigger on_entry() for self
-        self.active = true;
-        self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
         // create new span
         match parent_span {
             Some(x) => self.span = debug_span!(parent: x, "plan", name=%self.name),
             None => self.span = debug_span!("plan", name=%self.name),
         }
+        // trigger on_entry() for self
+        self.active = true;
+        self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
         // recursively enter all autostart child plans
         let i = self
             .plans
@@ -278,13 +292,13 @@ impl<C: Config> Plan<C> {
         true
     }
 
-    fn call<T>(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self) -> T, name: &str) -> T {
-        let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
-        let default = Box::new(C::Behaviour::from_any(behaviour::DefaultBehaviour).unwrap());
-        let mut behaviour = std::mem::replace(&mut self.behaviour, default);
-        let ret = f(&mut behaviour, self);
-        let _ = std::mem::replace(&mut self.behaviour, behaviour);
-        ret
+    fn call(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self), name: &str) {
+        let mut behaviour = std::mem::take(&mut self.behaviour);
+        if let Some(b) = &mut behaviour {
+            let _span = debug_span!(parent: &self.span, "call", func=%name).entered();
+            f(b, self);
+            self.behaviour = behaviour;
+        }
     }
 }
 
@@ -309,7 +323,7 @@ mod tests {
             .try_init();
     }
 
-    #[derive(Serialize, Deserialize, Default, Debug)]
+    #[derive(Serialize, Deserialize, FromAny, Default, Debug)]
     pub struct RunCountBehaviour {
         pub entry_count: u32,
         pub exit_count: u32,
@@ -320,25 +334,15 @@ mod tests {
         fn status(&self, _plan: &Plan<C>) -> Option<bool> {
             None
         }
-        fn on_entry(&mut self, _plan: &mut Plan<C>) {
+        fn on_entry(&mut self, plan: &mut Plan<C>) {
             self.entry_count += 1;
-            _plan
-                .behaviour
-                .as_any()
-                .downcast_ref::<RunCountBehaviour>()
-                .unwrap();
+            assert!(plan.behaviour.is_none())
         }
         fn on_exit(&mut self, _plan: &mut Plan<C>) {
             self.exit_count += 1;
         }
         fn on_run(&mut self, _plan: &mut Plan<C>) {
             self.run_count += 1;
-        }
-    }
-
-    impl FromAny for RunCountBehaviour {
-        fn from_any(_: impl Any) -> Option<Self> {
-            Some(Self::default())
         }
     }
 
@@ -393,7 +397,7 @@ mod tests {
         for (i, plan) in root_plan.plans.iter().enumerate() {
             assert!(!plan.active());
             assert_eq!(plan.name(), &((b'A' + (i as u8)) as char).to_string());
-            let sm = &plan.behaviour;
+            let sm = plan.behaviour.as_ref().unwrap();
             assert_eq!(sm.entry_count, 0);
             assert_eq!(sm.run_count, 0);
             assert_eq!(sm.exit_count, 0);
@@ -401,7 +405,7 @@ mod tests {
         root_plan.exit(false);
         for plan in &root_plan.plans {
             assert!(!plan.active());
-            assert_eq!(plan.behaviour.exit_count, 0);
+            assert_eq!(plan.behaviour.as_ref().unwrap().exit_count, 0);
         }
     }
 
@@ -429,7 +433,7 @@ mod tests {
         root_plan.exit(false);
 
         for plan in &root_plan.plans {
-            let sm = &plan.behaviour;
+            let sm = plan.behaviour.as_ref().unwrap();
             assert_eq!(sm.entry_count, cycles);
             assert_eq!(sm.exit_count, cycles);
             // off by one becase inital plan didn't run
@@ -466,8 +470,7 @@ mod tests {
     #[test]
     fn generate_plan() {
         tracing_init();
-        let root_plan =
-            Plan::<DefaultConfig>::new(behaviour::DefaultBehaviour.into(), "root", 1, true);
+        let root_plan = Plan::<DefaultConfig>::new_stub("root", true);
         // serialize and print root plan
         debug!("{}", serde_json::to_string_pretty(&root_plan).unwrap());
     }
@@ -476,11 +479,11 @@ mod tests {
     fn downcast() {
         use behaviour::*;
         type B = Behaviours<DefaultConfig>;
-        let mut a: B = DefaultBehaviour.into();
+        let mut a: B = AnySuccessStatus.into();
         let mut b: B = AllSuccessStatus.into();
-        a.as_any().downcast_ref::<DefaultBehaviour>().unwrap();
+        a.as_any().downcast_ref::<AnySuccessStatus>().unwrap();
         b.as_any().downcast_ref::<AllSuccessStatus>().unwrap();
-        a.as_any_mut().downcast_mut::<DefaultBehaviour>().unwrap();
+        a.as_any_mut().downcast_mut::<AnySuccessStatus>().unwrap();
         b.as_any_mut().downcast_mut::<AllSuccessStatus>().unwrap();
     }
 }

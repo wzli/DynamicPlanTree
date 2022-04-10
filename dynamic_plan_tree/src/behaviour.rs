@@ -32,8 +32,6 @@ behaviour_trait!();
 #[enum_dispatch(Behaviour<C>)]
 #[derive(Serialize, Deserialize, FromAny)]
 pub enum Behaviours<C: Config> {
-    DefaultBehaviour,
-
     AllSuccessStatus,
     AnySuccessStatus,
     EvaluateStatus(EvaluateStatus<C>),
@@ -44,15 +42,6 @@ pub enum Behaviours<C: Config> {
     SequenceBehaviour,
     FallbackBehaviour,
     MaxUtilBehaviour,
-}
-
-/// Empty behaviour used as default placeholder. Must be included in custom behaviour sets.
-#[derive(Serialize, Deserialize)]
-pub struct DefaultBehaviour;
-impl<C: Config> Behaviour<C> for DefaultBehaviour {
-    fn status(&self, _plan: &Plan<C>) -> Option<bool> {
-        None
-    }
 }
 
 /// Returns `false` if `f.evaluate()`, `true` if `t.evaluate()`, otherwise `None`.
@@ -417,10 +406,6 @@ mod tests {
         assert_eq!(plan.status(), Some(false));
     }
 
-    fn get_behaviour<T: Any>(x: &mut Plan<DC>) -> &mut T {
-        x.behaviour.as_any_mut().downcast_mut::<T>().unwrap()
-    }
-
     #[test]
     fn repeat_behaviour() {
         //use tracing::info;
@@ -451,20 +436,24 @@ mod tests {
             plan.run();
             assert_eq!(plan.status(), None);
         }
-        get_behaviour::<RepeatBehaviour<DC>>(&mut plan).behaviour =
-            Box::new(AnySuccessStatus.into());
+        plan.behaviour_cast_mut::<RepeatBehaviour<DC>>()
+            .unwrap()
+            .behaviour = Box::new(AnySuccessStatus.into());
         plan.run();
         assert_eq!(plan.status(), Some(false));
 
         // test retry bool
         plan.exit(false);
-        get_behaviour::<RepeatBehaviour<DC>>(&mut plan).retry = true;
+        plan.behaviour_cast_mut::<RepeatBehaviour<DC>>()
+            .unwrap()
+            .retry = true;
         for _ in 0..3 {
             plan.run();
             assert_eq!(plan.status(), None);
         }
-        get_behaviour::<RepeatBehaviour<DC>>(&mut plan).behaviour =
-            Box::new(AllSuccessStatus.into());
+        plan.behaviour_cast_mut::<RepeatBehaviour<DC>>()
+            .unwrap()
+            .behaviour = Box::new(AllSuccessStatus.into());
         plan.run();
         assert_eq!(plan.status(), Some(true));
     }
@@ -484,7 +473,7 @@ mod tests {
             });
         }
         // the last child plan returns None
-        plan.insert(Plan::new(DefaultBehaviour.into(), "5", 0, false));
+        plan.insert(Plan::new_stub("5", false));
         // check that child plans sequentually transition as long current child status succeeds
         for i in 0..5 {
             plan.run();
@@ -505,7 +494,7 @@ mod tests {
         plan.run();
         assert_eq!(plan.status(), Some(true));
         // expect that sequence will jump back to previusly successful child if status changes
-        plan.insert(Plan::new(DefaultBehaviour.into(), "3", 0, false));
+        plan.insert(Plan::new_stub("3", false));
         plan.run();
         assert_eq!(plan.plans.iter().find(|x| x.active()).unwrap().name(), "3");
         assert_eq!(plan.status(), None);
@@ -532,7 +521,6 @@ mod tests {
         #[enum_dispatch(Behaviour<C>)]
         #[derive(Serialize, Deserialize, FromAny)]
         pub enum TestBehaviours<C: Config> {
-            DefaultBehaviour,
             EvaluateStatus(EvaluateStatus<C>),
             MaxUtilBehaviour,
             SetUtilBehaviour,
