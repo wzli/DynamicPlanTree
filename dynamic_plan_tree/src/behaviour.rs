@@ -241,7 +241,7 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
 /// Behaviour that sequentially transitions through child plans until first failure.
 ///
 /// # Transitions
-/// Plan is expected to contain transitions that form a linear seqeunce
+/// Plan is expected to contain transitions that form a linear sequence of success predicates,
 /// with only one child plan active at a time. Behaviour is undefined otherwise.
 ///
 /// If the status of any previously visited child plan changes from success,
@@ -251,6 +251,7 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
 /// - Success when all child plans succeed.
 /// - Failure when any child plan fails.
 /// - None while otherwise in-progress.
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct SequenceBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for SequenceBehaviour {
@@ -263,6 +264,19 @@ impl<C: Config> Behaviour<C> for SequenceBehaviour {
 }
 
 /// Behaviour that sequentially transitions through child plans until first success.
+///
+/// # Transitions
+/// Plan is expected to contain transitions that form a linear sequence of failure predicates,
+/// with only one child plan active at a time. Behaviour is undefined otherwise.
+///
+/// If the status of any previously visited child plan changes from failure,
+/// the sequence will transition back to that point.
+///
+/// # Status
+/// - Success when any child plans succeeds.
+/// - Failure when all child plan fail.
+/// - None while otherwise in-progress.
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct FallbackBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for FallbackBehaviour {
