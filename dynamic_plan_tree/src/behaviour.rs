@@ -439,24 +439,20 @@ mod tests {
             plan.run();
             assert_eq!(plan.status(), None);
         }
-        plan.behaviour_cast_mut::<RepeatBehaviour<DC>>()
-            .unwrap()
-            .behaviour = Box::new(AnySuccessStatus.into());
+        plan.cast_mut::<RepeatBehaviour<DC>>().unwrap().behaviour =
+            Box::new(AnySuccessStatus.into());
         plan.run();
         assert_eq!(plan.status(), Some(false));
 
         // test retry bool
         plan.exit(false);
-        plan.behaviour_cast_mut::<RepeatBehaviour<DC>>()
-            .unwrap()
-            .retry = true;
+        plan.cast_mut::<RepeatBehaviour<DC>>().unwrap().retry = true;
         for _ in 0..3 {
             plan.run();
             assert_eq!(plan.status(), None);
         }
-        plan.behaviour_cast_mut::<RepeatBehaviour<DC>>()
-            .unwrap()
-            .behaviour = Box::new(AllSuccessStatus.into());
+        plan.cast_mut::<RepeatBehaviour<DC>>().unwrap().behaviour =
+            Box::new(AllSuccessStatus.into());
         plan.run();
         assert_eq!(plan.status(), Some(true));
     }

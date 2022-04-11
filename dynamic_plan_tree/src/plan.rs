@@ -26,6 +26,11 @@ pub trait FromAny: Sized {
     fn from_any(x: impl Any) -> Option<Self>;
 }
 
+pub trait AsAnyCast {
+    fn cast<T: 'static>(&self) -> Option<&T>;
+    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T>;
+}
+
 /// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
 #[derive(Serialize, Deserialize)]
 pub struct Transition<P> {
@@ -50,6 +55,27 @@ pub struct Plan<C: Config> {
     span: Span,
 }
 
+/// Cast to underlying predicate in transition.
+impl<P: Predicate> AsAnyCast for Transition<P> {
+    fn cast<T: 'static>(&self) -> Option<&T> {
+        self.predicate.as_any().downcast_ref::<T>()
+    }
+    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.predicate.as_any_mut().downcast_mut::<T>()
+    }
+}
+
+/// Cast to underlying behaviour in plan.
+impl<C: Config> AsAnyCast for Plan<C> {
+    fn cast<T: 'static>(&self) -> Option<&T> {
+        self.behaviour.as_ref()?.as_any().downcast_ref::<T>()
+    }
+
+    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.behaviour.as_mut()?.as_any_mut().downcast_mut::<T>()
+    }
+}
+
 impl<C: Config> Plan<C> {
     pub fn name(&self) -> &String {
         &self.name
@@ -72,14 +98,6 @@ impl<C: Config> Plan<C> {
             .as_ref()
             .map(|b| b.utility(self))
             .unwrap_or(0.)
-    }
-
-    pub fn behaviour_cast<T: Any>(&self) -> Option<&T> {
-        self.behaviour.as_ref()?.as_any().downcast_ref::<T>()
-    }
-
-    pub fn behaviour_cast_mut<T: Any>(&mut self) -> Option<&mut T> {
-        self.behaviour.as_mut()?.as_any_mut().downcast_mut::<T>()
     }
 
     pub fn new(
