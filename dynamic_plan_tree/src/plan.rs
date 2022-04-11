@@ -115,10 +115,10 @@ impl<C: Config> Plan<C> {
             if self.active {
                 // create new span if this plan and inserted plan is active
                 plan.span = debug_span!(parent: &self.span, "plan", name=%plan.name);
+            } else {
+                // exit inserted span if this plan is inactive
+                plan.exit(false);
             }
-        } else {
-            // exit inserted span if this plan is inactive
-            plan.exit(false);
         }
         // sorted insert
         let (pos, _) = match self.find(&plan.name) {
