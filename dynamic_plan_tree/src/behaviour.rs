@@ -506,8 +506,10 @@ mod tests {
 
     #[test]
     fn max_util_behaviour() {
+        //use tracing::info;
+        //let _ = tracing_subscriber::fmt::try_init();
         #[derive(Serialize, Deserialize)]
-        pub struct SetUtilBehaviour(f64);
+        pub struct SetUtilBehaviour(pub f64);
         impl<C: Config> Behaviour<C> for SetUtilBehaviour {
             fn status(&self, _plan: &Plan<C>) -> Option<bool> {
                 None
@@ -531,8 +533,49 @@ mod tests {
             type Predicate = predicate::True;
             type Behaviour = TestBehaviours<Self>;
         }
-        // type TC = TestConfig;
-        //use tracing::info;
-        //let _ = tracing_subscriber::fmt::try_init();
+        type TC = TestConfig;
+        let mut plan = Plan::<TC>::new(MaxUtilBehaviour.into(), "root", 1, true);
+        // insert 5 child plans with ascending utility
+        for i in 0..5 {
+            plan.insert(Plan::new(
+                SetUtilBehaviour(i.into()).into(),
+                i.to_string(),
+                0,
+                false,
+            ));
+        }
+        // expect that highest utility plan is entered
+        plan.run();
+        let mut active = plan
+            .plans
+            .iter_mut()
+            .filter(|x| x.active())
+            .collect::<Vec<_>>();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].name(), "4");
+        // reduce utility of active plan and expect transition to another
+        active[0].cast_mut::<SetUtilBehaviour>().unwrap().0 = 0.0;
+        plan.run();
+        let active = plan
+            .plans
+            .iter_mut()
+            .filter(|x| x.active())
+            .collect::<Vec<_>>();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].name(), "3");
+        // increase utility of non-active plan and expect transition to it
+        plan.get_mut("2")
+            .unwrap()
+            .cast_mut::<SetUtilBehaviour>()
+            .unwrap()
+            .0 = 10.0;
+        plan.run();
+        let active = plan
+            .plans
+            .iter_mut()
+            .filter(|x| x.active())
+            .collect::<Vec<_>>();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].name(), "2");
     }
 }
