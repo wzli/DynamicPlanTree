@@ -24,7 +24,7 @@ pub trait FromAny: Sized {
     fn from_any(x: impl Any) -> Option<Self>;
 }
 
-pub trait AsAnyCast {
+pub trait Cast {
     fn cast<T: 'static>(&self) -> Option<&T>;
     fn cast_mut<T: 'static>(&mut self) -> Option<&mut T>;
 }
@@ -54,7 +54,7 @@ pub struct Plan<C: Config> {
 }
 
 /// Cast to underlying predicate in transition.
-impl<P: Predicate> AsAnyCast for Transition<P> {
+impl<P: Predicate> Cast for Transition<P> {
     fn cast<T: 'static>(&self) -> Option<&T> {
         self.predicate.as_any().downcast_ref::<T>()
     }
@@ -64,7 +64,7 @@ impl<P: Predicate> AsAnyCast for Transition<P> {
 }
 
 /// Cast to underlying behaviour in plan.
-impl<C: Config> AsAnyCast for Plan<C> {
+impl<C: Config> Cast for Plan<C> {
     fn cast<T: 'static>(&self) -> Option<&T> {
         self.behaviour.as_ref()?.as_any().downcast_ref::<T>()
     }
