@@ -4,16 +4,15 @@ pub use crate::*;
 #[macro_export]
 macro_rules! predicate_trait {
     () => {
-        use $crate::plan as __plan;
         /// An object that implements runtime predicate evaluation logic of an active plan.
         #[enum_dispatch]
         pub trait Predicate: Sized + 'static {
-            fn evaluate(&self, plan: &__plan::Plan<impl __plan::Config>, src: &[String]) -> bool;
+            fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
 
-            fn as_any(&self) -> &dyn std::any::Any {
+            fn as_any(&self) -> &dyn Any {
                 self
             }
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            fn as_any_mut(&mut self) -> &mut dyn Any {
                 self
             }
         }

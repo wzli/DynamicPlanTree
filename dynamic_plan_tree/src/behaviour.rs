@@ -4,24 +4,23 @@ pub use crate::*;
 #[macro_export]
 macro_rules! behaviour_trait {
     () => {
-        use $crate::plan as __plan;
         /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
-        pub trait Behaviour<C: __plan::Config>: Sized + 'static {
-            fn status(&self, plan: &__plan::Plan<C>) -> Option<bool>;
-            fn utility(&self, _plan: &__plan::Plan<C>) -> f64 {
+        pub trait Behaviour<C: Config>: Sized + 'static {
+            fn status(&self, plan: &Plan<C>) -> Option<bool>;
+            fn utility(&self, _plan: &Plan<C>) -> f64 {
                 0.
             }
-            fn on_entry(&mut self, _plan: &mut __plan::Plan<C>) {}
-            fn on_exit(&mut self, _plan: &mut __plan::Plan<C>) {}
+            fn on_entry(&mut self, _plan: &mut Plan<C>) {}
+            fn on_exit(&mut self, _plan: &mut Plan<C>) {}
 
-            fn on_pre_run(&mut self, _plan: &mut __plan::Plan<C>) {}
-            fn on_run(&mut self, _plan: &mut __plan::Plan<C>) {}
+            fn on_pre_run(&mut self, _plan: &mut Plan<C>) {}
+            fn on_run(&mut self, _plan: &mut Plan<C>) {}
 
-            fn as_any(&self) -> &dyn std::any::Any {
+            fn as_any(&self) -> &dyn Any {
                 self
             }
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            fn as_any_mut(&mut self) -> &mut dyn Any {
                 self
             }
         }

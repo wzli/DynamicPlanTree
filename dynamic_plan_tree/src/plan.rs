@@ -4,11 +4,8 @@ use crate::*;
 use rayon::prelude::*;
 
 use serde::de::DeserializeOwned;
-use std::any::Any;
 use std::collections::HashMap;
 use tracing::{debug, debug_span, Span};
-
-pub use serde_value::Value;
 
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config: Sized + 'static {
@@ -51,7 +48,7 @@ pub struct Plan<C: Config> {
     pub behaviour: Option<Box<C::Behaviour>>,
     pub transitions: Vec<Transition<C::Predicate>>,
     pub plans: Vec<Self>,
-    pub data: HashMap<String, Value>,
+    pub data: HashMap<String, serde_value::Value>,
     #[serde(skip, default = "Span::none")]
     span: Span,
 }
