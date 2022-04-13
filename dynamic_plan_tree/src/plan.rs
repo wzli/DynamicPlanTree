@@ -177,7 +177,7 @@ impl<C: Config> Plan<C> {
             .filter(|plan| plan.active)
             .map(|plan| &plan.name)
             .collect::<HashSet<_>>();
-        debug!(parent: &self.span, plans=?active_plans, "active");
+        debug!(parent: &self.span, plan=?self.name(), active=?active_plans);
 
         // evaluate state transitions
         let transitions = std::mem::take(&mut self.transitions);
