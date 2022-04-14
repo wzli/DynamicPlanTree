@@ -165,6 +165,14 @@ impl<C: Config> Plan<C> {
         Some(&mut self.plans[pos])
     }
 
+    pub fn get_cast<B: Behaviour<C>>(&self, name: &str) -> Option<&B> {
+        self.get(name)?.cast::<B>()
+    }
+
+    pub fn get_cast_mut<B: Behaviour<C>>(&mut self, name: &str) -> Option<&mut B> {
+        self.get_mut(name)?.cast_mut::<B>()
+    }
+
     pub fn run(&mut self) {
         // enter plan if not already
         self.enter(None);
