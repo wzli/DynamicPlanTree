@@ -1,5 +1,15 @@
 pub use enum_cast_derive::EnumCast;
 
+#[macro_export]
+macro_rules! enum_cast {
+    ($enum: expr, $var: path $(,)?) => {{
+        match &$enum {
+            $var(a) => Some(a),
+            _ => None,
+        }
+    }};
+}
+
 pub trait EnumRef<T> {
     fn enum_ref(&self) -> Option<&T>;
     fn enum_mut(&mut self) -> Option<&mut T>;
