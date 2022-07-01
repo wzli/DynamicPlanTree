@@ -208,9 +208,9 @@ impl<C: Config> Plan<C> {
             });
         let _ = std::mem::replace(&mut self.transitions, transitions);
 
-        // call on_pre_run() before children behaviours run()
+        // call on_prepare() before children behaviours run()
         if self.run_interval > 0 && self.run_countdown == 0 {
-            self.call(|behaviour, plan| behaviour.on_pre_run(plan), "pre_run");
+            self.call(|behaviour, plan| behaviour.on_prepare(plan), "prepare");
         }
 
         // call run() recursively

@@ -14,7 +14,7 @@ macro_rules! behaviour_trait {
             fn on_entry(&mut self, _plan: &mut Plan<C>) {}
             fn on_exit(&mut self, _plan: &mut Plan<C>) {}
 
-            fn on_pre_run(&mut self, _plan: &mut Plan<C>) {}
+            fn on_prepare(&mut self, _plan: &mut Plan<C>) {}
             fn on_run(&mut self, _plan: &mut Plan<C>) {}
 
             fn as_any(&self) -> &dyn Any {
@@ -102,8 +102,8 @@ impl<C: Config> Behaviour<C> for ModifyStatus<C> {
     fn on_exit(&mut self, plan: &mut Plan<C>) {
         self.0.on_exit(plan);
     }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
-        self.0.on_pre_run(plan);
+    fn on_prepare(&mut self, plan: &mut Plan<C>) {
+        self.0.on_prepare(plan);
     }
     fn on_run(&mut self, plan: &mut Plan<C>) {
         self.0.on_run(plan);
@@ -138,9 +138,9 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
             behaviour.on_exit(plan);
         }
     }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+    fn on_prepare(&mut self, plan: &mut Plan<C>) {
         for behaviour in &mut self.0 {
-            behaviour.on_pre_run(plan);
+            behaviour.on_prepare(plan);
         }
     }
     fn on_run(&mut self, plan: &mut Plan<C>) {
@@ -194,7 +194,7 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
     fn on_exit(&mut self, plan: &mut Plan<C>) {
         self.behaviour.on_exit(plan);
     }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+    fn on_prepare(&mut self, plan: &mut Plan<C>) {
         // run only while status is indeterminant
         if self.status.is_some() {
             return;
@@ -210,7 +210,7 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
             self.status = Some(!self.retry);
             return;
         }
-        self.behaviour.on_pre_run(plan);
+        self.behaviour.on_prepare(plan);
     }
     fn on_run(&mut self, plan: &mut Plan<C>) {
         // run only while status is indeterminant
@@ -251,7 +251,7 @@ impl<C: Config> Behaviour<C> for SequenceBehaviour {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AllSuccessStatus.status(plan)
     }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+    fn on_prepare(&mut self, plan: &mut Plan<C>) {
         check_visited_status_and_jump(plan, &mut self.0, false);
     }
 }
@@ -274,7 +274,7 @@ impl<C: Config> Behaviour<C> for FallbackBehaviour {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
         AnySuccessStatus.status(plan)
     }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+    fn on_prepare(&mut self, plan: &mut Plan<C>) {
         check_visited_status_and_jump(plan, &mut self.0, true);
     }
 }
@@ -326,7 +326,7 @@ impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
             None => 0.,
         }
     }
-    fn on_pre_run(&mut self, plan: &mut Plan<C>) {
+    fn on_prepare(&mut self, plan: &mut Plan<C>) {
         // get highest utility plan
         let best = match max_utility(&plan.plans) {
             Some((plan, _)) => plan.name().clone(),
