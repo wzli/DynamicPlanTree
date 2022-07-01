@@ -21,10 +21,10 @@ pub fn from_any_derive(input: TokenStream) -> TokenStream {
                 impl #impl_generics FromAny for #name #ty_generics #where_clause {
                     fn from_any(x: impl std::any::Any) -> Option<Self> {
                     let mut x = Some(x);
-                    let _x = &mut x as &mut dyn std::any::Any;
+                    let x = &mut x as &mut dyn std::any::Any;
                     #(
-                        if let Some(x) = _x.downcast_mut::<Option<#fields>>() {
-                            std::mem::take(x).map(|x| x.into())
+                        if let Some(x) = x.downcast_mut::<Option<#fields>>() {
+                            std::mem::take(x).map(Into::into)
                         } else
                      )*
                     {None}
