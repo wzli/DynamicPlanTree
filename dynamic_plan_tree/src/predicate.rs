@@ -8,13 +8,6 @@ macro_rules! predicate_trait {
         #[enum_dispatch]
         pub trait Predicate: Sized + 'static {
             fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-            fn as_any_mut(&mut self) -> &mut dyn Any {
-                self
-            }
         }
     };
 }
@@ -22,7 +15,7 @@ predicate_trait!();
 
 /// Default set of built-in predicates to serve as example template.
 #[enum_dispatch(Predicate)]
-#[derive(Serialize, Deserialize, FromAny)]
+#[derive(Serialize, Deserialize, EnumCast)]
 pub enum Predicates {
     True,
     False,
@@ -166,7 +159,7 @@ fn any_success<C: Config>(plan: &Plan<C>, src: &[String], none_val: bool) -> boo
 mod tests {
     use super::*;
 
-    #[derive(Serialize, Deserialize, FromAny)]
+    #[derive(Serialize, Deserialize, EnumCast)]
     pub struct SetStatusBehaviour(pub Option<bool>);
     impl<C: Config> Behaviour<C> for SetStatusBehaviour {
         fn status(&self, _: &Plan<C>) -> Option<bool> {
@@ -175,7 +168,7 @@ mod tests {
     }
 
     #[enum_dispatch(Predicate)]
-    #[derive(Serialize, Deserialize, FromAny)]
+    #[derive(Serialize, Deserialize, EnumCast)]
     enum TestPredicate {
         True,
         False,

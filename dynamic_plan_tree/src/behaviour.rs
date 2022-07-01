@@ -16,13 +16,6 @@ macro_rules! behaviour_trait {
 
             fn on_prepare(&mut self, _plan: &mut Plan<C>) {}
             fn on_run(&mut self, _plan: &mut Plan<C>) {}
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-            fn as_any_mut(&mut self) -> &mut dyn Any {
-                self
-            }
         }
     };
 }
@@ -30,7 +23,7 @@ behaviour_trait!();
 
 /// Default set of built-in behaviours to serve as example template.
 #[enum_dispatch(Behaviour<C>)]
-#[derive(Serialize, Deserialize, FromAny)]
+#[derive(Serialize, Deserialize, EnumCast)]
 pub enum Behaviours<C: Config> {
     AllSuccessStatus,
     AnySuccessStatus,
@@ -520,7 +513,7 @@ mod tests {
         }
 
         #[enum_dispatch(Behaviour<C>)]
-        #[derive(Serialize, Deserialize, FromAny)]
+        #[derive(Serialize, Deserialize, EnumCast)]
         pub enum TestBehaviours<C: Config> {
             EvaluateStatus(EvaluateStatus<C>),
             MaxUtilBehaviour,

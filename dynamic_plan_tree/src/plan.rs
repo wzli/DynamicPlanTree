@@ -10,22 +10,31 @@ use tracing::{debug, debug_span, Span};
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config: Sized + 'static {
     #[cfg(feature = "rayon")]
-    type Predicate: Predicate + Send + Serialize + DeserializeOwned + FromAny;
+    type Predicate: Predicate + Send + Serialize + DeserializeOwned + EnumCast;
     #[cfg(not(feature = "rayon"))]
-    type Predicate: Predicate + Serialize + DeserializeOwned + FromAny;
+    type Predicate: Predicate + Serialize + DeserializeOwned + EnumCast;
 
     #[cfg(feature = "rayon")]
-    type Behaviour: Behaviour<Self> + Send + Serialize + DeserializeOwned + FromAny;
+    type Behaviour: Behaviour<Self> + Send + Serialize + DeserializeOwned + EnumCast;
     #[cfg(not(feature = "rayon"))]
-    type Behaviour: Behaviour<Self> + Serialize + DeserializeOwned + FromAny;
+    type Behaviour: Behaviour<Self> + Serialize + DeserializeOwned + EnumCast;
 }
 
-pub trait FromAny: Sized {
-    fn from_any(x: impl Any) -> Option<Self>;
+pub trait EnumRef<T> {
+    fn enum_ref(&self) -> Option<&T>;
+    fn enum_mut(&mut self) -> Option<&mut T>;
 }
 
-pub trait IntoAny {
-    fn into_any<T: FromAny>(self) -> Option<T>
+pub trait EnumCast {
+    fn cast<T: 'static>(&self) -> Option<&T>;
+    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T>;
+    fn from_any<T: 'static>(t: T) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+pub trait IntoEnum {
+    fn into_enum<T: EnumCast>(self) -> Option<T>
     where
         Self: 'static + Sized,
     {
@@ -33,12 +42,7 @@ pub trait IntoAny {
     }
 }
 
-impl<T> IntoAny for T {}
-
-pub trait Cast {
-    fn cast<T: 'static>(&self) -> Option<&T>;
-    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T>;
-}
+impl<T> IntoEnum for T {}
 
 /// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
 #[derive(Serialize, Deserialize)]
@@ -62,27 +66,6 @@ pub struct Plan<C: Config> {
     pub data: HashMap<String, serde_value::Value>,
     #[serde(skip, default = "Span::none")]
     span: Span,
-}
-
-/// Cast to underlying predicate in transition.
-impl<P: Predicate> Cast for Transition<P> {
-    fn cast<T: 'static>(&self) -> Option<&T> {
-        self.predicate.as_any().downcast_ref::<T>()
-    }
-    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.predicate.as_any_mut().downcast_mut::<T>()
-    }
-}
-
-/// Cast to underlying behaviour in plan.
-impl<C: Config> Cast for Plan<C> {
-    fn cast<T: 'static>(&self) -> Option<&T> {
-        self.behaviour.as_ref()?.as_any().downcast_ref::<T>()
-    }
-
-    fn cast_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.behaviour.as_mut()?.as_any_mut().downcast_mut::<T>()
-    }
 }
 
 impl<C: Config> Plan<C> {
@@ -174,6 +157,14 @@ impl<C: Config> Plan<C> {
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Self> {
         let pos = self.find(name).ok()?;
         Some(&mut self.plans[pos])
+    }
+
+    pub fn cast<B: Behaviour<C>>(&self) -> Option<&B> {
+        self.behaviour.as_ref()?.cast::<B>()
+    }
+
+    pub fn cast_mut<B: Behaviour<C>>(&mut self) -> Option<&mut B> {
+        self.behaviour.as_mut()?.cast_mut::<B>()
     }
 
     pub fn get_cast<B: Behaviour<C>>(&self, name: &str) -> Option<&B> {
@@ -354,7 +345,7 @@ mod tests {
             .try_init();
     }
 
-    #[derive(Serialize, Deserialize, FromAny, Default, Debug)]
+    #[derive(Serialize, Deserialize, EnumCast, Default, Debug)]
     pub struct RunCountBehaviour {
         pub entry_count: u32,
         pub exit_count: u32,
@@ -394,17 +385,17 @@ mod tests {
             Transition {
                 src: vec!["A".into()],
                 dst: vec!["B".into()],
-                predicate: predicate::True.into_any().unwrap(),
+                predicate: predicate::True.into_enum().unwrap(),
             },
             Transition {
                 src: vec!["B".into()],
                 dst: vec!["C".into()],
-                predicate: predicate::True.into_any().unwrap(),
+                predicate: predicate::True.into_enum().unwrap(),
             },
             Transition {
                 src: vec!["C".into()],
                 dst: vec!["A".into()],
-                predicate: predicate::True.into_any().unwrap(),
+                predicate: predicate::True.into_enum().unwrap(),
             },
         ];
         // init plan to A
@@ -512,9 +503,9 @@ mod tests {
         type B = Behaviours<DefaultConfig>;
         let mut a: B = AnySuccessStatus.into();
         let mut b: B = AllSuccessStatus.into();
-        a.as_any().downcast_ref::<AnySuccessStatus>().unwrap();
-        b.as_any().downcast_ref::<AllSuccessStatus>().unwrap();
-        a.as_any_mut().downcast_mut::<AnySuccessStatus>().unwrap();
-        b.as_any_mut().downcast_mut::<AllSuccessStatus>().unwrap();
+        a.cast::<AnySuccessStatus>().unwrap();
+        b.cast::<AllSuccessStatus>().unwrap();
+        a.cast_mut::<AnySuccessStatus>().unwrap();
+        b.cast_mut::<AllSuccessStatus>().unwrap();
     }
 }
