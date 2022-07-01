@@ -1,5 +1,6 @@
 [workspace]
 members = [
   "dynamic_plan_tree",
-  "dynamic_plan_tree_derive",
+  "enum_cast",
+  "enum_cast_derive",
 ]

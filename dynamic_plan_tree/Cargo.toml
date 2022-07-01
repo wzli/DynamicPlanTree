@@ -3,10 +3,8 @@ name = "dynamic_plan_tree"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-dynamic_plan_tree_derive = { path = "../dynamic_plan_tree_derive" }
+enum_cast = { path = "../enum_cast" }
 enum_dispatch = "0.3"
 rayon = { version = "1.5", optional = true }
 serde = { version = "1.0", features = ["derive"]}

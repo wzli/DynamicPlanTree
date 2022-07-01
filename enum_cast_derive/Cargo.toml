@@ -1,5 +1,5 @@
 [package]
-name = "dynamic_plan_tree_derive"
+name = "enum_cast_derive"
 version = "0.1.0"
 edition = "2021"
 

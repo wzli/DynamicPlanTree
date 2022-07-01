@@ -1,5 +1,5 @@
 pub use behaviour::Behaviour;
-pub use dynamic_plan_tree_derive::EnumCast;
+pub use enum_cast::*;
 pub use enum_dispatch::enum_dispatch;
 pub use plan::*;
 pub use predicate::Predicate;
