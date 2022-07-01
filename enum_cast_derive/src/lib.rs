@@ -22,7 +22,7 @@ pub fn enum_cast_derive(input: TokenStream) -> TokenStream {
 
             quote! {
                 #(
-                    impl #impl_generics enum_cast::EnumRef<#fields> for  #name #ty_generics #where_clause {
+                    impl #impl_generics EnumRef<#fields> for  #name #ty_generics #where_clause {
                         fn enum_ref(&self) -> Option<&#fields> {
                             match self {
                                 Self::#idents(x) => Some(x),
@@ -38,7 +38,7 @@ pub fn enum_cast_derive(input: TokenStream) -> TokenStream {
                     }
                 )*
 
-                impl #impl_generics enum_cast::EnumCast for #name #ty_generics #where_clause {
+                impl #impl_generics EnumCast for #name #ty_generics #where_clause {
                     fn cast<T: 'static>(&self) -> Option<&T> {
                         match self {
                             #(
@@ -70,7 +70,7 @@ pub fn enum_cast_derive(input: TokenStream) -> TokenStream {
         }
         Data::Struct(_) => {
             quote! {
-                impl #impl_generics enum_cast::EnumCast for #name #ty_generics #where_clause {
+                impl #impl_generics EnumCast for #name #ty_generics #where_clause {
                     fn cast<T: 'static>(&self) -> Option<&T> {
                         (self as &dyn std::any::Any).downcast_ref::<T>()
                     }
