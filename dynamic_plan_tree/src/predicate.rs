@@ -40,7 +40,7 @@ pub enum Predicates {
     AnyFailure,
 }
 
-#[derive(Serialize, Deserialize, FromAny)]
+#[derive(Serialize, Deserialize)]
 pub struct True;
 impl Predicate for True {
     fn evaluate(&self, _: &Plan<impl Config>, _: &[String]) -> bool {

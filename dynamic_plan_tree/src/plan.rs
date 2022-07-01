@@ -24,6 +24,17 @@ pub trait FromAny: Sized {
     fn from_any(x: impl Any) -> Option<Self>;
 }
 
+pub trait IntoAny {
+    fn into_any<T: FromAny>(self) -> Option<T>
+    where
+        Self: 'static + Sized,
+    {
+        T::from_any(self)
+    }
+}
+
+impl<T> IntoAny for T {}
+
 pub trait Cast {
     fn cast<T: 'static>(&self) -> Option<&T>;
     fn cast_mut<T: 'static>(&mut self) -> Option<&mut T>;
@@ -369,7 +380,7 @@ mod tests {
     #[derive(Serialize, Deserialize)]
     struct TestConfig;
     impl Config for TestConfig {
-        type Predicate = predicate::True;
+        type Predicate = predicate::Predicates;
         type Behaviour = RunCountBehaviour;
     }
 
@@ -383,17 +394,17 @@ mod tests {
             Transition {
                 src: vec!["A".into()],
                 dst: vec!["B".into()],
-                predicate: predicate::True,
+                predicate: predicate::True.into_any().unwrap(),
             },
             Transition {
                 src: vec!["B".into()],
                 dst: vec!["C".into()],
-                predicate: predicate::True,
+                predicate: predicate::True.into_any().unwrap(),
             },
             Transition {
                 src: vec!["C".into()],
                 dst: vec!["A".into()],
-                predicate: predicate::True,
+                predicate: predicate::True.into_any().unwrap(),
             },
         ];
         // init plan to A

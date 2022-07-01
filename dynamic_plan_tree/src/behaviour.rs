@@ -530,7 +530,7 @@ mod tests {
         #[derive(Serialize, Deserialize)]
         struct TestConfig;
         impl Config for TestConfig {
-            type Predicate = predicate::True;
+            type Predicate = predicate::Predicates;
             type Behaviour = TestBehaviours<Self>;
         }
         type TC = TestConfig;
