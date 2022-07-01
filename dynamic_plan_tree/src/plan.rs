@@ -3,25 +3,34 @@ use crate::*;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
+#[cfg(feature = "serde")]
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use tracing::{debug, debug_span, Span};
 
 /// A user provided object to statically pass in custom implementation for `Behaviour` and `Predicate`.
 pub trait Config: Sized + 'static {
-    #[cfg(feature = "rayon")]
+    #[cfg(all(feature = "rayon", feature = "serde"))]
     type Predicate: Predicate + Send + Serialize + DeserializeOwned + EnumCast;
-    #[cfg(not(feature = "rayon"))]
+    #[cfg(all(not(feature = "rayon"), feature = "serde"))]
     type Predicate: Predicate + Serialize + DeserializeOwned + EnumCast;
+    #[cfg(all(feature = "rayon", not(feature = "serde")))]
+    type Predicate: Predicate + Send + EnumCast;
+    #[cfg(all(not(feature = "rayon"), not(feature = "serde")))]
+    type Predicate: Predicate + EnumCast;
 
-    #[cfg(feature = "rayon")]
+    #[cfg(all(feature = "rayon", feature = "serde"))]
     type Behaviour: Behaviour<Self> + Send + Serialize + DeserializeOwned + EnumCast;
-    #[cfg(not(feature = "rayon"))]
+    #[cfg(all(not(feature = "rayon"), feature = "serde"))]
     type Behaviour: Behaviour<Self> + Serialize + DeserializeOwned + EnumCast;
+    #[cfg(all(feature = "rayon", not(feature = "serde")))]
+    type Behaviour: Behaviour<Self> + Send + EnumCast;
+    #[cfg(all(not(feature = "rayon"), not(feature = "serde")))]
+    type Behaviour: Behaviour<Self> + EnumCast;
 }
 
 /// Transition from `src` plans to `dst` plans within the parent plan upon the result of `predicate` evaluation.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Transition<P> {
     pub src: Vec<String>,
     pub dst: Vec<String>,
@@ -29,7 +38,7 @@ pub struct Transition<P> {
 }
 
 /// A node in the plan tree containing some behaviour, children plans, and possible transitions.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Plan<C: Config> {
     name: String,
     active: bool,
@@ -40,7 +49,7 @@ pub struct Plan<C: Config> {
     pub transitions: Vec<Transition<C::Predicate>>,
     pub plans: Vec<Self>,
     pub data: HashMap<String, serde_value::Value>,
-    #[serde(skip, default = "Span::none")]
+    #[cfg_attr(feature = "serde", serde(skip, default = "Span::none"))]
     span: Span,
 }
 
@@ -321,7 +330,8 @@ mod tests {
             .try_init();
     }
 
-    #[derive(Serialize, Deserialize, EnumCast, Default, Debug)]
+    #[derive(Default, Debug, EnumCast)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct RunCountBehaviour {
         pub entry_count: u32,
         pub exit_count: u32,
@@ -344,7 +354,7 @@ mod tests {
         }
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     struct TestConfig;
     impl Config for TestConfig {
         type Predicate = predicate::Predicates;
@@ -444,7 +454,7 @@ mod tests {
         }
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     struct DefaultConfig;
     impl Config for DefaultConfig {
         type Predicate = predicate::Predicates;
@@ -452,6 +462,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn generate_schema() {
         tracing_init();
         // generate and print plan schema
@@ -466,6 +477,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn generate_plan() {
         tracing_init();
         let root_plan = Plan::<DefaultConfig>::new_stub("root", true);

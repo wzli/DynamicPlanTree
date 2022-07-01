@@ -15,7 +15,8 @@ predicate_trait!();
 
 /// Default set of built-in predicates to serve as example template.
 #[enum_dispatch(Predicate)]
-#[derive(Serialize, Deserialize, EnumCast)]
+#[derive(EnumCast)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Predicates {
     True,
     False,
@@ -33,7 +34,7 @@ pub enum Predicates {
     AnyFailure,
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct True;
 impl Predicate for True {
     fn evaluate(&self, _: &Plan<impl Config>, _: &[String]) -> bool {
@@ -41,7 +42,7 @@ impl Predicate for True {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct False;
 impl Predicate for False {
     fn evaluate(&self, _: &Plan<impl Config>, _: &[String]) -> bool {
@@ -49,7 +50,7 @@ impl Predicate for False {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct And<P>(pub Vec<P>);
 impl<P: Predicate> Predicate for And<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -57,7 +58,7 @@ impl<P: Predicate> Predicate for And<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Or<P>(pub Vec<P>);
 impl<P: Predicate> Predicate for Or<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -65,7 +66,7 @@ impl<P: Predicate> Predicate for Or<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Xor<P>(pub Vec<P>);
 impl<P: Predicate> Predicate for Xor<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -73,7 +74,7 @@ impl<P: Predicate> Predicate for Xor<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Not<P>(pub Box<P>);
 impl<P: Predicate> Predicate for Not<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -81,7 +82,7 @@ impl<P: Predicate> Predicate for Not<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Nand<P>(pub Vec<P>);
 impl<P: Predicate> Predicate for Nand<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -89,7 +90,7 @@ impl<P: Predicate> Predicate for Nand<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Nor<P>(pub Vec<P>);
 impl<P: Predicate> Predicate for Nor<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -97,7 +98,7 @@ impl<P: Predicate> Predicate for Nor<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Xnor<P>(pub Vec<P>);
 impl<P: Predicate> Predicate for Xnor<P> {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -105,7 +106,7 @@ impl<P: Predicate> Predicate for Xnor<P> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AllSuccess;
 impl Predicate for AllSuccess {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -113,7 +114,7 @@ impl Predicate for AllSuccess {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AnySuccess;
 impl Predicate for AnySuccess {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -121,7 +122,7 @@ impl Predicate for AnySuccess {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AllFailure;
 impl Predicate for AllFailure {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -129,7 +130,7 @@ impl Predicate for AllFailure {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AnyFailure;
 impl Predicate for AnyFailure {
     fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool {
@@ -159,7 +160,8 @@ fn any_success<C: Config>(plan: &Plan<C>, src: &[String], none_val: bool) -> boo
 mod tests {
     use super::*;
 
-    #[derive(Serialize, Deserialize, EnumCast)]
+    #[derive(EnumCast)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct SetStatusBehaviour(pub Option<bool>);
     impl<C: Config> Behaviour<C> for SetStatusBehaviour {
         fn status(&self, _: &Plan<C>) -> Option<bool> {
@@ -168,13 +170,14 @@ mod tests {
     }
 
     #[enum_dispatch(Predicate)]
-    #[derive(Serialize, Deserialize, EnumCast)]
+    #[derive(EnumCast)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     enum TestPredicate {
         True,
         False,
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     struct TestConfig;
     impl Config for TestConfig {
         type Predicate = TestPredicate;

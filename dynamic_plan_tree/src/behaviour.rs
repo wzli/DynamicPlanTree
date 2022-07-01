@@ -23,7 +23,8 @@ behaviour_trait!();
 
 /// Default set of built-in behaviours to serve as example template.
 #[enum_dispatch(Behaviour<C>)]
-#[derive(Serialize, Deserialize, EnumCast)]
+#[derive(EnumCast)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Behaviours<C: Config> {
     AllSuccessStatus,
     AnySuccessStatus,
@@ -53,7 +54,7 @@ pub fn evaluate_status<C: Config, T: Predicate, F: Predicate>(
 }
 
 /// Behaviour with status that invokes `evaluate_status(&self.0, &self.1)`.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EvaluateStatus<C: Config>(pub C::Predicate, pub C::Predicate);
 impl<C: Config> Behaviour<C> for EvaluateStatus<C> {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
@@ -62,7 +63,7 @@ impl<C: Config> Behaviour<C> for EvaluateStatus<C> {
 }
 
 /// Behaviour with status `true` if `AllSuccess`, `false` if `AnyFailure`, otherwise `None`.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AllSuccessStatus;
 impl<C: Config> Behaviour<C> for AllSuccessStatus {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
@@ -71,7 +72,7 @@ impl<C: Config> Behaviour<C> for AllSuccessStatus {
 }
 
 /// Behaviour with status `true` if `AnySuccess`, `false` if `AllFailure`, otherwise `None`.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AnySuccessStatus;
 impl<C: Config> Behaviour<C> for AnySuccessStatus {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
@@ -80,7 +81,7 @@ impl<C: Config> Behaviour<C> for AnySuccessStatus {
 }
 
 /// Wraps inner behaviour. If inner status exists, invert when `self.1` is `None` otherwise use `self.1`.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ModifyStatus<C: Config>(pub Box<C::Behaviour>, pub Option<bool>);
 impl<C: Config> Behaviour<C> for ModifyStatus<C> {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
@@ -104,7 +105,7 @@ impl<C: Config> Behaviour<C> for ModifyStatus<C> {
 }
 
 /// Vector of behaviours sharing the same plan. Status takes aggregate AND. Utility takes aggregate sum.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MultiBehaviour<C: Config>(pub Vec<C::Behaviour>);
 impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
     fn status(&self, plan: &Plan<C>) -> Option<bool> {
@@ -144,7 +145,7 @@ impl<C: Config> Behaviour<C> for MultiBehaviour<C> {
 }
 
 /// Repeats inner behaviour for specified iterations until failure encountered while condition holds.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RepeatBehaviour<C: Config> {
     /// Behaviour that expects some status on completion to mark each iteration.
     pub behaviour: Box<C::Behaviour>,
@@ -235,7 +236,8 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
 /// If the status of any previously visited child plan changes from success,
 /// the sequence will transition back to that point.
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SequenceBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for SequenceBehaviour {
     /// - Success when all child plans succeed.
@@ -258,7 +260,8 @@ impl<C: Config> Behaviour<C> for SequenceBehaviour {
 /// If the status of any previously visited child plan changes from failure,
 /// the sequence will transition back to that point.
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FallbackBehaviour(Vec<String>);
 impl<C: Config> Behaviour<C> for FallbackBehaviour {
     /// - Success when any child plans succeeds.
@@ -305,7 +308,7 @@ fn check_visited_status_and_jump<C: Config>(
 /// Behaviour that monitors and transitions to the child plan with highest utility.
 ///
 /// Plan is expected to contain no transitions, with only one child active at a time. Behaviour is undefined otherwise.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MaxUtilBehaviour;
 impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
     /// Returns status of currently active child plan.
@@ -358,7 +361,7 @@ pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
 mod tests {
     use super::*;
 
-    #[derive(Serialize, Deserialize)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     struct DefaultConfig;
     impl Config for DefaultConfig {
         type Predicate = predicate::Predicates;
@@ -501,7 +504,7 @@ mod tests {
     fn max_util_behaviour() {
         //use tracing::info;
         //let _ = tracing_subscriber::fmt::try_init();
-        #[derive(Serialize, Deserialize)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub struct SetUtilBehaviour(pub f64);
         impl<C: Config> Behaviour<C> for SetUtilBehaviour {
             fn status(&self, _plan: &Plan<C>) -> Option<bool> {
@@ -513,14 +516,15 @@ mod tests {
         }
 
         #[enum_dispatch(Behaviour<C>)]
-        #[derive(Serialize, Deserialize, EnumCast)]
+        #[derive(EnumCast)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub enum TestBehaviours<C: Config> {
             EvaluateStatus(EvaluateStatus<C>),
             MaxUtilBehaviour,
             SetUtilBehaviour,
         }
 
-        #[derive(Serialize, Deserialize)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         struct TestConfig;
         impl Config for TestConfig {
             type Predicate = predicate::Predicates;
