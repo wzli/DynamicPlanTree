@@ -160,8 +160,9 @@ pub struct RepeatBehaviour<C: Config> {
     pub condition: Option<C::Predicate>,
     /// Stop running behaviour after specified iterations.
     pub iterations: usize,
-    /// Repeat until behaviour status returns `retry` (either success or failure).
-    pub retry: bool,
+    /// Repeat until behaviour status returns `Some(stop_value)`.
+    /// Useful for repeated retries when `stop_value = true`.
+    pub stop_value: bool,
 
     count_down: usize,
     status: Option<bool>,
@@ -173,7 +174,7 @@ impl<C: Config> RepeatBehaviour<C> {
             behaviour: Box::new(behaviour),
             condition: None,
             iterations: usize::MAX,
-            retry: false,
+            stop_value: false,
             count_down: 0,
             status: None,
         }
@@ -208,7 +209,7 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
                 .map(|x| x.evaluate(plan, &[]))
                 .unwrap_or(true)
         {
-            self.status = Some(!self.retry);
+            self.status = Some(!self.stop_value);
             return;
         }
         self.behaviour.on_prepare(plan);
@@ -221,14 +222,14 @@ impl<C: Config> Behaviour<C> for RepeatBehaviour<C> {
         self.behaviour.on_run(plan);
         // tick countdown only when inner behaviour return some status
         if let Some(status) = self.behaviour.status(plan) {
-            if status != self.retry {
+            if status == self.stop_value {
+                // if failure, store status and stop
+                self.status = Some(self.stop_value);
+            } else {
                 // if success, decrement countdown and reset behaviour
                 self.count_down -= 1;
                 self.behaviour.on_exit(plan);
                 self.behaviour.on_entry(plan);
-            } else {
-                // if failure, store status and stop
-                self.status = Some(self.retry);
             }
         }
     }
@@ -449,7 +450,7 @@ mod tests {
 
         // test retry bool
         plan.exit(false);
-        plan.cast_mut::<RepeatBehaviour<DC>>().unwrap().retry = true;
+        plan.cast_mut::<RepeatBehaviour<DC>>().unwrap().stop_value = true;
         for _ in 0..3 {
             plan.run();
             assert_eq!(plan.status(), None);
