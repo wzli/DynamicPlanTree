@@ -37,39 +37,50 @@ pub struct Transition<P> {
     pub predicate: P,
 }
 
-/// A node in the plan tree containing some behaviour, children plans, and possible transitions.
+/// A node in the plan tree containing some behaviour, subplans, and possible transitions.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Plan<C: Config> {
     name: String,
     active: bool,
     run_countdown: u32,
+    /// Number of ticks between each run.
     pub run_interval: u32,
+    /// Automatically enter follwing the entry of parent plan.
     pub autostart: bool,
+    /// Customizable runtime logic.
     pub behaviour: Option<Box<C::Behaviour>>,
+    /// List of transition conditions between sets of subplans.
     pub transitions: Vec<Transition<C::Predicate>>,
+    /// Contains instances of subplans recursively.
     pub plans: Vec<Self>,
+    /// Storage for arbituary serializable data.
     pub data: HashMap<String, serde_value::Value>,
     #[cfg_attr(feature = "serde", serde(skip, default = "Span::none"))]
     span: Span,
 }
 
 impl<C: Config> Plan<C> {
+    /// ID unique amongst subplans.
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    /// Whether the inner behaviour is scheduled to run.
     pub fn active(&self) -> bool {
         self.active
     }
 
+    /// Number of ticks until next run.
     pub fn run_countdown(&self) -> u32 {
         self.run_countdown
     }
 
+    /// Status of the inner behaviour.
     pub fn status(&self) -> Option<bool> {
         self.behaviour.as_ref()?.status(self)
     }
 
+    /// Utility of the inner behaviour.
     pub fn utility(&self) -> f64 {
         self.behaviour
             .as_ref()
@@ -77,6 +88,7 @@ impl<C: Config> Plan<C> {
             .unwrap_or(0.)
     }
 
+    /// New plan with behaviour and no subplans.
     pub fn new(
         behaviour: C::Behaviour,
         name: impl Into<String>,
@@ -89,6 +101,7 @@ impl<C: Config> Plan<C> {
         s
     }
 
+    /// New plan without any behaviour.
     pub fn new_stub(name: impl Into<String>, autostart: bool) -> Self {
         Self {
             name: name.into(),

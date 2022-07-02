@@ -7,14 +7,21 @@ macro_rules! behaviour_trait {
         /// An object that implements runtime behaviour logic of an active plan.
         #[enum_dispatch]
         pub trait Behaviour<C: Config>: Sized + 'static {
+            /// State of the plan's objective. May be queried while inactive.
+            ///
+            /// **In Progress** := `None` **Success** := `Some(true)` **Failure** := `Some(false)`
             fn status(&self, plan: &Plan<C>) -> Option<bool>;
+            /// Value of the plan under current circumstances. May be queried while inactive.
             fn utility(&self, _plan: &Plan<C>) -> f64 {
                 0.
             }
+            /// Triggers once upon becoming active.
             fn on_entry(&mut self, _plan: &mut Plan<C>) {}
+            /// Triggers once upon becoming inactive.
             fn on_exit(&mut self, _plan: &mut Plan<C>) {}
-
+            /// Triggers before each run. Executes before subplans if scheduled on the same tick.
             fn on_prepare(&mut self, _plan: &mut Plan<C>) {}
+            /// Triggers repeatedly while active. Executes after subplans if scheduled on the same tick.
             fn on_run(&mut self, _plan: &mut Plan<C>) {}
         }
     };
