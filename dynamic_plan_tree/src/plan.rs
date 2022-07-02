@@ -41,7 +41,6 @@ pub struct Transition<P> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Plan<C: Config> {
     name: String,
-    active: bool,
     run_countdown: u32,
     /// Number of ticks between each run.
     pub run_interval: u32,
@@ -67,7 +66,7 @@ impl<C: Config> Plan<C> {
 
     /// Whether the inner behaviour is scheduled to run.
     pub fn active(&self) -> bool {
-        self.active
+        self.run_countdown < u32::MAX
     }
 
     /// Number of ticks until next run.
@@ -105,8 +104,7 @@ impl<C: Config> Plan<C> {
     pub fn new_stub(name: impl Into<String>, autostart: bool) -> Self {
         Self {
             name: name.into(),
-            active: false,
-            run_countdown: 0,
+            run_countdown: u32::MAX,
             run_interval: 0,
             autostart,
             behaviour: None,
@@ -119,8 +117,8 @@ impl<C: Config> Plan<C> {
 
     pub fn insert(&mut self, mut plan: Self) -> &mut Self {
         debug!(parent: &self.span, plan=%plan.name, "insert");
-        if plan.active {
-            if self.active {
+        if plan.active() {
+            if self.active() {
                 // create new span if this plan and inserted plan is active
                 plan.span = debug_span!(parent: &self.span, "plan", name=%plan.name);
             } else {
@@ -182,7 +180,7 @@ impl<C: Config> Plan<C> {
         let active_plans = self
             .plans
             .iter()
-            .filter(|plan| plan.active)
+            .filter(|plan| plan.active())
             .map(|plan| &plan.name)
             .collect::<HashSet<_>>();
         debug!(parent: &self.span, plan=?self.name(), active=?active_plans);
@@ -214,7 +212,7 @@ impl<C: Config> Plan<C> {
         }
 
         // call run() recursively
-        let i = self.plans.iter_mut().filter(|plan| plan.active);
+        let i = self.plans.iter_mut().filter(|plan| plan.active());
         #[cfg(feature = "rayon")]
         i.par_bridge().for_each(|plan| plan.run());
         #[cfg(not(feature = "rayon"))]
@@ -234,7 +232,7 @@ impl<C: Config> Plan<C> {
 
     pub fn enter_plan(&mut self, name: &str) -> Option<&mut Self> {
         // can only enter plans within an active plan
-        if !self.active {
+        if !self.active() {
             return None;
         }
         // look for requested plan
@@ -261,7 +259,7 @@ impl<C: Config> Plan<C> {
 
     pub fn enter(&mut self, parent_span: Option<&Span>) -> bool {
         // only enter if plan is inactive
-        if self.active {
+        if self.active() {
             return false;
         }
         // create new span
@@ -270,13 +268,13 @@ impl<C: Config> Plan<C> {
             None => self.span = debug_span!("plan", name=%self.name),
         }
         // trigger on_entry() for self
-        self.active = true;
+        self.run_countdown = 0;
         self.call(|behaviour, plan| behaviour.on_entry(plan), "entry");
         // recursively enter all autostart child plans
         let i = self
             .plans
             .iter_mut()
-            .filter(|plan| plan.autostart && !plan.active);
+            .filter(|plan| plan.autostart && !plan.active());
         #[cfg(feature = "rayon")]
         i.par_bridge().for_each(|plan| {
             plan.enter(Some(&self.span));
@@ -290,11 +288,11 @@ impl<C: Config> Plan<C> {
 
     pub fn exit(&mut self, exclude_self: bool) -> bool {
         // only exit if plan is active
-        if !self.active {
+        if !self.active() {
             return false;
         }
         // recursively exit all active child plans
-        let i = self.plans.iter_mut().filter(|plan| plan.active);
+        let i = self.plans.iter_mut().filter(|plan| plan.active());
         #[cfg(feature = "rayon")]
         i.par_bridge().for_each(|plan| {
             plan.exit(false);
@@ -306,7 +304,7 @@ impl<C: Config> Plan<C> {
         // trigger on_exit() for self
         if !exclude_self {
             self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
-            self.active = false;
+            self.run_countdown = u32::MAX;
             self.span = Span::none();
         }
         true
@@ -324,7 +322,7 @@ impl<C: Config> Plan<C> {
 
 impl<C: Config> Drop for Plan<C> {
     fn drop(&mut self) {
-        if self.active {
+        if self.active() {
             self.call(|behaviour, plan| behaviour.on_exit(plan), "exit");
         }
     }
