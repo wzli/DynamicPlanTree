@@ -115,6 +115,10 @@ impl<C: Config> Plan<C> {
         }
     }
 
+    /// Insert plan instance as a subplan then return its reference.
+    ///
+    /// Subplan will be exited if current plan is inactive.
+    /// Existing subplan with the same name will be overwritten.
     pub fn insert(&mut self, mut plan: Self) -> &mut Self {
         debug!(parent: &self.span, plan=%plan.name, "insert");
         if plan.active() {
@@ -127,7 +131,7 @@ impl<C: Config> Plan<C> {
             }
         }
         // sorted insert
-        let (pos, _) = match self.find(&plan.name) {
+        let (pos, _) = match self.priority(&plan.name) {
             // overwrite if there is already one
             Ok(pos) => (pos, self.plans[pos] = plan),
             Err(pos) => (pos, self.plans.insert(pos, plan)),
@@ -135,42 +139,61 @@ impl<C: Config> Plan<C> {
         &mut self.plans[pos]
     }
 
+    /// Remove a subplan by name, and return it if successful.
     pub fn remove(&mut self, name: &str) -> Option<Self> {
-        let pos = self.find(name).ok()?;
+        let pos = self.priority(name).ok()?;
         debug!(parent: &self.span, plan=%name, "remove");
         Some(self.plans.remove(pos))
     }
 
-    pub fn find(&self, name: &str) -> Result<usize, usize> {
+    /// Find the priority of a subplan by name.
+    ///
+    /// Subplans run in order of their priority (unless rayon parallel execution is enabled).
+    ///
+    /// Priority is determined by the ordering of the subplans sorted by name.
+    /// For example, plan with names `"plan0" < "plan1"` means `"plan0"` has higher priority.
+    pub fn priority(&self, name: &str) -> Result<usize, usize> {
         self.plans.binary_search_by(|plan| (*plan.name).cmp(name))
     }
 
+    /// Returns reference to subplan by name.
     pub fn get(&self, name: &str) -> Option<&Self> {
-        let pos = self.find(name).ok()?;
+        let pos = self.priority(name).ok()?;
         Some(&self.plans[pos])
     }
 
+    /// Returns mutable reference to subplan by name.
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Self> {
-        let pos = self.find(name).ok()?;
+        let pos = self.priority(name).ok()?;
         Some(&mut self.plans[pos])
     }
 
+    /// Dynamically cast inner behaviour to a reference its known static type.
+    ///
+    /// For refering to concrete behaviours within the implementation of another.
     pub fn cast<B: Behaviour<C>>(&self) -> Option<&B> {
         self.behaviour.as_ref()?.cast::<B>()
     }
 
+    /// See [Plan::cast].
     pub fn cast_mut<B: Behaviour<C>>(&mut self) -> Option<&mut B> {
         self.behaviour.as_mut()?.cast_mut::<B>()
     }
 
+    /// Dynamically cast inner behaviours of subplans to a reference of its know type.
+    /// See [Plan::cast].
     pub fn get_cast<B: Behaviour<C>>(&self, name: &str) -> Option<&B> {
         self.get(name)?.cast::<B>()
     }
 
+    /// See [Plan::get_cast].
     pub fn get_cast_mut<B: Behaviour<C>>(&mut self, name: &str) -> Option<&mut B> {
         self.get_mut(name)?.cast_mut::<B>()
     }
 
+    /// Run plan tree recursively. Each call at root level consitutes one tick of execution.
+    ///
+    /// Scheduling and transitions for all subplan are handled in the process.
     pub fn run(&mut self) {
         // enter plan if not already
         self.enter(None);
@@ -230,13 +253,14 @@ impl<C: Config> Plan<C> {
         self.run_countdown -= 1;
     }
 
+    ///  Enters the specified subplan if not already active and return its reference.
     pub fn enter_plan(&mut self, name: &str) -> Option<&mut Self> {
         // can only enter plans within an active plan
         if !self.active() {
             return None;
         }
         // look for requested plan
-        let pos = match self.find(name) {
+        let pos = match self.priority(name) {
             Ok(pos) => pos,
             // if plan doesn't exist, create and insert a default plan
             Err(pos) => {
@@ -249,14 +273,18 @@ impl<C: Config> Plan<C> {
         Some(plan)
     }
 
+    ///  Exits the specified subplan if currenlty active and return its reference.
     pub fn exit_plan(&mut self, name: &str) -> Option<&mut Self> {
         // ignore if plan is not found
-        let pos = self.find(name).ok()?;
+        let pos = self.priority(name).ok()?;
         let plan = &mut self.plans[pos];
         plan.exit(false);
         Some(plan)
     }
 
+    /// Enter this plan if not already active.
+    ///
+    /// Also recursively enters all subplans with autostart enabled.
     pub fn enter(&mut self, parent_span: Option<&Span>) -> bool {
         // only enter if plan is inactive
         if self.active() {
@@ -286,6 +314,7 @@ impl<C: Config> Plan<C> {
         true
     }
 
+    /// Exit this plan and all subplans recursively if currently active.
     pub fn exit(&mut self, exclude_self: bool) -> bool {
         // only exit if plan is active
         if !self.active() {
@@ -310,6 +339,7 @@ impl<C: Config> Plan<C> {
         true
     }
 
+    /// Helper to wrap calling inner behaviour from plan.
     fn call(&mut self, f: impl FnOnce(&mut Box<C::Behaviour>, &mut Self), name: &str) {
         let mut behaviour = std::mem::take(&mut self.behaviour);
         if let Some(b) = &mut behaviour {
@@ -320,6 +350,7 @@ impl<C: Config> Plan<C> {
     }
 }
 
+/// Exit the plan on drop.
 impl<C: Config> Drop for Plan<C> {
     fn drop(&mut self) {
         if self.active() {
