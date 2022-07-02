@@ -4,7 +4,7 @@ pub use crate::*;
 #[macro_export]
 macro_rules! predicate_trait {
     () => {
-        /// An object that implements runtime predicate evaluation logic of an active plan.
+        /// An object that implements run-time predicate evaluation logic of an active plan.
         #[enum_dispatch]
         pub trait Predicate: Sized + 'static {
             fn evaluate(&self, plan: &Plan<impl Config>, src: &[String]) -> bool;

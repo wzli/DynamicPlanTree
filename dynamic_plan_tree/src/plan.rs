@@ -44,22 +44,22 @@ pub struct Plan<C: Config> {
     run_countdown: u32,
     /// Number of ticks between each run.
     pub run_interval: u32,
-    /// Automatically enter follwing the entry of parent plan.
+    /// Automatically enter following the entry of parent plan.
     pub autostart: bool,
-    /// Customizable runtime logic.
+    /// Customizable run-time logic.
     pub behaviour: Option<Box<C::Behaviour>>,
     /// List of transition conditions between sets of subplans.
     pub transitions: Vec<Transition<C::Predicate>>,
     /// Contains instances of subplans recursively.
     pub plans: Vec<Self>,
-    /// Storage for arbituary serializable data.
+    /// Storage for arbitrary serializable data.
     pub data: HashMap<String, serde_value::Value>,
     #[cfg_attr(feature = "serde", serde(skip, default = "Span::none"))]
     span: Span,
 }
 
 impl<C: Config> Plan<C> {
-    /// ID unique amongst subplans.
+    /// ID unique among subplans.
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -170,7 +170,7 @@ impl<C: Config> Plan<C> {
 
     /// Dynamically cast inner behaviour to a reference its known static type.
     ///
-    /// For refering to concrete behaviours within the implementation of another.
+    /// For referring to concrete behaviours within the implementation of another.
     pub fn cast<B: Behaviour<C>>(&self) -> Option<&B> {
         self.behaviour.as_ref()?.cast::<B>()
     }
@@ -180,7 +180,7 @@ impl<C: Config> Plan<C> {
         self.behaviour.as_mut()?.cast_mut::<B>()
     }
 
-    /// Dynamically cast inner behaviours of subplans to a reference of its know type.
+    /// Dynamically cast inner behaviour of a subplan to reference of its known type.
     /// See [Plan::cast].
     pub fn get_cast<B: Behaviour<C>>(&self, name: &str) -> Option<&B> {
         self.get(name)?.cast::<B>()
@@ -191,7 +191,7 @@ impl<C: Config> Plan<C> {
         self.get_mut(name)?.cast_mut::<B>()
     }
 
-    /// Run plan tree recursively. Each call at root level consitutes one tick of execution.
+    /// Run plan tree recursively. Each call at root level constitutes one tick of execution.
     ///
     /// Scheduling and transitions for all subplan are handled in the process.
     pub fn run(&mut self) {
@@ -254,6 +254,7 @@ impl<C: Config> Plan<C> {
     }
 
     ///  Enters the specified subplan if not already active and return its reference.
+    ///  See [Plan::enter].
     pub fn enter_plan(&mut self, name: &str) -> Option<&mut Self> {
         // can only enter plans within an active plan
         if !self.active() {
@@ -273,7 +274,8 @@ impl<C: Config> Plan<C> {
         Some(plan)
     }
 
-    ///  Exits the specified subplan if currenlty active and return its reference.
+    ///  Exits the specified subplan if currently active and return its reference.
+    ///  See [Plan::exit].
     pub fn exit_plan(&mut self, name: &str) -> Option<&mut Self> {
         // ignore if plan is not found
         let pos = self.priority(name).ok()?;

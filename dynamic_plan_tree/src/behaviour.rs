@@ -4,7 +4,7 @@ pub use crate::*;
 #[macro_export]
 macro_rules! behaviour_trait {
     () => {
-        /// An object that implements runtime behaviour logic of an active plan.
+        /// An object that implements run-time behaviour logic of an active plan.
         #[enum_dispatch]
         pub trait Behaviour<C: Config>: Sized + 'static {
             /// State of the plan's objective. May be queried while inactive.
@@ -350,7 +350,7 @@ impl<C: Config> Behaviour<C> for MaxUtilBehaviour {
     }
 }
 
-/// Find and return the plan with higest utility.
+/// Find and return the plan with highest utility.
 pub fn max_utility<C: Config>(plans: &[Plan<C>]) -> Option<(&Plan<C>, f64)> {
     if plans.is_empty() {
         None
