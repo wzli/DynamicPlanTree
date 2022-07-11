@@ -41,6 +41,7 @@ pub struct Transition<P> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Plan<C: Config> {
     name: String,
+    #[cfg_attr(feature = "serde", serde(default = "u32::max_value"))]
     run_countdown: u32,
     /// Number of ticks between each run.
     pub run_interval: u32,
