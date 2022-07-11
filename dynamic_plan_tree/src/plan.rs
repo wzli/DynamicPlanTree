@@ -250,6 +250,7 @@ impl<C: Config> Plan<C> {
             self.call(|behaviour, plan| behaviour.on_run(plan), "run");
             self.run_countdown = self.run_interval;
         }
+        // ok to countdown without active check because plan must be active by this point
         self.run_countdown -= 1;
     }
 
@@ -432,6 +433,7 @@ mod tests {
         root_plan.insert(new_plan("A", true));
         root_plan.insert(new_plan("B", false));
         root_plan.insert(new_plan("C", false));
+        root_plan.insert(new_plan("D", false));
         root_plan
     }
 
@@ -472,19 +474,26 @@ mod tests {
             assert!(!root_plan.get("A").unwrap().active());
             assert!(!root_plan.get("B").unwrap().active());
             assert!(root_plan.get("C").unwrap().active());
+            assert!(!root_plan.get("D").unwrap().active());
             root_plan.run();
             assert!(root_plan.get("A").unwrap().active());
             assert!(!root_plan.get("B").unwrap().active());
             assert!(!root_plan.get("C").unwrap().active());
+            assert!(!root_plan.get("D").unwrap().active());
             root_plan.run();
             assert!(!root_plan.get("A").unwrap().active());
             assert!(root_plan.get("B").unwrap().active());
             assert!(!root_plan.get("C").unwrap().active());
+            assert!(!root_plan.get("D").unwrap().active());
             root_plan.run();
         }
         root_plan.exit(false);
 
         for plan in &root_plan.plans {
+            if plan.name() == "D" {
+                assert!(!plan.active());
+                continue;
+            }
             let sm = plan.behaviour.as_ref().unwrap();
             assert_eq!(sm.entry_count, cycles);
             assert_eq!(sm.exit_count, cycles);
