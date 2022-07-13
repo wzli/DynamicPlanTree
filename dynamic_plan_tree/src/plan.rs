@@ -239,6 +239,11 @@ impl<C: Config> Plan<C> {
             self.call(|behaviour, plan| behaviour.on_prepare(plan), "prepare");
         }
 
+        // skip plan if exited during prepare
+        if !self.active() {
+            return;
+        }
+
         // call run() recursively
         let i = self.plans.iter_mut().filter(|plan| plan.active());
         #[cfg(feature = "rayon")]
