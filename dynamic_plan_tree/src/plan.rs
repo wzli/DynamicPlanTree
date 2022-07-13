@@ -119,17 +119,21 @@ impl<C: Config> Plan<C> {
     /// Insert plan instance as a subplan then return its reference.
     ///
     /// Subplan will be exited if current plan is inactive.
+    /// Subplan will be entered if current plan is active and autostart is set.
     /// Existing subplan with the same name will be overwritten.
     pub fn insert(&mut self, mut plan: Self) -> &mut Self {
         debug!(parent: &self.span, plan=%plan.name, "insert");
-        if plan.active() {
-            if self.active() {
-                // create new span if this plan and inserted plan is active
+        if self.active() {
+            // overwrite preview span with new parent if already active
+            if plan.active() {
                 plan.span = debug_span!(parent: &self.span, "plan", name=%plan.name);
-            } else {
-                // exit inserted span if this plan is inactive
-                plan.exit(false);
+            // when autostart is set, enter inserted plan if parent is active
+            } else if plan.autostart {
+                plan.enter(Some(&self.span));
             }
+        // exit inserted span if parent plan is inactive
+        } else if plan.active() {
+            plan.exit(false);
         }
         // sorted insert
         let (pos, _) = match self.priority(&plan.name) {
